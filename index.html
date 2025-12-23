@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Phaser MZ-Minimal</title>
+
+  <link rel="stylesheet" href="./src/style.css" />
+
+  <!-- Phaser 3 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+</head>
+<body>
+  <div id="game"></div>
+
+  <div id="menu" class="show">
+  <div class="menu-box">
+    <h1 class="menu-title">主選單</h1>
+
+    <div id="menuHelp" class="menu-help">
+      ↑↓←→ 移動　Enter 確認　Esc 返回/關閉 設定：←→ 調整音量<br/>
+      遊戲中：S 存檔　Q 開啟副選單　R 回主選單　Esc 返回/關閉
+    </div>
+
+    <div id="menuToast" class="menu-toast hide"></div>
+
+    <button id="btnStart">開始遊戲</button>
+    <button id="btnContinue">繼續遊戲</button>
+
+    <button id="btnSettings">條件設置</button>
+    <div id="settingsPanel" class="settings">
+      <label>音樂 <input id="musicVol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+      <label>音效 <input id="sfxVol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+    </div>
+
+    <div class="menu-hint">R：回主選單</div>
+  </div>
+</div>
+
+<div id="ingameMenu" class="ingame-menu">
+  <div class="panel">
+    <div class="title">選單</div>
+    <button id="btnSave">存檔</button>
+    <button id="btnStatus">人物狀況</button>
+    <button id="btnResume">返回遊戲</button>
+    <div class="hint">↑↓ 選擇　Enter 確認　Esc 返回</div>
+  </div>
+</div>
+
+<div id="saveConfirm" class="popup">
+  <div class="panel">
+    <div class="title">確定要覆蓋存檔？</div>
+    <button id="btnSaveYes">確認存檔</button>
+    <button id="btnSaveNo">返回</button>
+  </div>
+</div>
+
+<div id="toast" class="toast">已存檔</div>
+
+<div id="statusPanel" class="status-panel" aria-hidden="true">
+  <div id="statusCard" class="panel">
+    <div class="avatar-wrap">
+      <img id="statusAvatar" src="" alt="角色頭像">
+    </div>
+
+    <div class="info">
+      <div class="row"><span class="label">姓名：</span><span id="statusName"></span></div>
+      <div class="row"><span class="label">種族：</span><span id="statusRace"></span></div>
+      <div class="row"><span class="label">狀況：</span><span id="statusState"></span></div>
+      <div class="row"><span class="label">技能：</span><span id="statusSkill"></span></div>
+    </div>
+  </div>
+</div>
+
+
+  <div id="dialog">
+    <div class="dialog-left">
+      <img id="dialogPortrait" src="" alt="portrait" />
+    </div>
+
+    <div class="dialog-right">
+      <div class="name" id="dialogName"></div>
+      <div id="dialogText"></div>
+      <div class="hint">按 Enter / Space 繼續</div>
+    </div>
+  </div>
+
+  <div id="endOverlay" class="end-overlay">
+  <div class="end-text"><h1>END - 感謝遊玩<br>(按 A 重新開始)<h1></div>
+</div>
+
+  <script src="./src/game.js"></script>
+</body>
+</html>
