@@ -496,6 +496,17 @@ const DIALOGS = {
     ]},
     { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！",action: { type: "jump", actor: "cat" } },
     { name: "褚冥漾", text: "喵喵？！", face: "shock" },
+    { name: "米可蕥", text: "沒想到你竟然還不承認罪刑！",action: { type: "jump", actor: "cat" } },
+    { name: "褚冥漾", text: "你們有給我辯解的機會嗎！！！", face: "really" },
+    { name: "  ", text: "這時，米可蕥往旁邊移動了些，給來人讓出些位置。" , action: [ 
+      { type: "runTo", actor: "qian", x: 445, y: 170, ms: 500 }, 
+      { type: "runTo", actor: "cat", x: 415, y: 170, ms: 500 },
+      { type: "show", actor: "ryan" },
+      { type: "runTo", actor: "ryan", x: 420, y: 196, ms: 500 }
+    ]},
+    { name: "米可蕥", text: "你看！把萊恩打得都只能隱身了！",action: { type: "jump", actor: "cat" } },
+    { name: "褚冥漾", text: "......" },
+    { name: "褚冥漾", text: "屁啦！！！", face: "deny",action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     
   ]
 };
@@ -558,6 +569,17 @@ function shouldcatBeVisible(lines, idx) {
   return false;
 }
 
+function shouldryanBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "ryan")) return true;
+  }
+  return false;
+}
+
 function flattenActions(action) {
   if (!action) return [];
   return Array.isArray(action) ? action.filter(Boolean) : [action];
@@ -579,11 +601,15 @@ function applyStoryWorldState(scene) {
   const bing = scene.actors.bing;
   const qian = scene.actors.qian;
   const cat = scene.actors.cat;
+  const ryan = scene.actors.ryan;
+
 
   // ---- 預設：先清掉殘留（重要） ----
   if (bing?.setVisible) bing.setVisible(false);
   if (qian?.setVisible) qian.setVisible(false);
   if (cat?.setVisible) cat.setVisible(false);
+  if (ryan?.setVisible) ryan.setVisible(false);
+
 
   // ========== A) prologue_fire：冰炎 ==========
   if (currentDialogId === "prologue_fire" && bing && chu) {
@@ -647,8 +673,10 @@ function applyStoryWorldState(scene) {
 if (currentDialogId === "white_garden" && cat) {
   cat.setVisible(shouldcatBeVisible(lines, idx));
 }
-  // wake_blackhall：冰炎不在（保持隱藏）
-  // white_garden：冰炎不在（保持隱藏）
+  
+if (currentDialogId === "white_garden" && ryan) {
+  ryan.setVisible(shouldryanBeVisible(lines, idx));
+}
 }
 
 function lineHasGotoStage(line) {
@@ -1346,9 +1374,9 @@ preload() {
   this.load.image("qian_front_red", "assets/img/qian_front_red.png");
   this.load.image("cat_front", "assets/img/cat_front.png");
   this.load.image("ryan_front", "assets/img/ryan_front.png");
-  this.load.image("cat_front", "assets/img/cat_front.png");
-  this.load.image("cat_front", "assets/img/cat_front.png");
-  this.load.image("cat_front", "assets/img/cat_front.png");
+  this.load.image("angel_front", "assets/img/angel_front.png");
+  this.load.image("moon_front", "assets/img/moon_front.png");
+  this.load.image("ran_front", "assets/img/ran_front.png");
 
   // 你如果之後有冰炎/第三人，也可以加
   // this.load.image("bing_front", "assets/bing_front.png");
@@ -1510,6 +1538,8 @@ for (const colName of collisionNames) {
     bing: this.add.sprite(240, 200, "bing_front").setVisible(false),
     qian: this.add.sprite(240, 200, "qian_front_red").setVisible(false),
     cat:  this.add.sprite(240, 200, "cat_front").setVisible(false),
+    ryan: this.add.sprite(240, 200, "ryan_front").setVisible(false),
+
   };
 
   this.player = this.actors.chu;
@@ -1524,17 +1554,20 @@ for (const colName of collisionNames) {
   this.actors.chu.facing = "right";
   this.actors.qian.facing = "right";
   this.actors.cat.facing = "right";
+  this.actors.ryan.facing = "right";
 
   // 角色比例
   this.actors.bing.setScale(1.08);
   this.actors.qian.setScale(1.02);
-  this.actors.cat.setScale(0.8);
+  this.actors.cat.setScale(0.89);
+  this.actors.ryan.setScale(1.1);
 
   // 深度（你之後會用 layer depth 再蓋過這些）
   this.actors.chu.setDepth(30);
   this.actors.bing.setDepth(29);
   this.actors.qian.setDepth(29);
   this.actors.cat.setDepth(29);
+  this.actors.ryan.setDepth(29);
 
   // ============ GameState / 讀檔決定初始地圖 ============
   const gs = ensureGameState();
@@ -1725,4 +1758,3 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
-
