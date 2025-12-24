@@ -505,9 +505,15 @@ const DIALOGS = {
       { type: "runTo", actor: "ryan", x: 420, y: 196, ms: 500 }
     ]},
     { name: "米可蕥", text: "你看！把萊恩打得都只能隱身了！",action: { type: "jump", actor: "cat" } },
+    { name: "萊恩？", text: "......" },
     { name: "褚冥漾", text: "......" },
     { name: "褚冥漾", text: "屁啦！！！", face: "deny",action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
-    
+    { name: "褚冥漾", text: "『槽點太多了不知道該從哪裡開始吐槽......』", face: "deny" },
+    { name: "褚冥漾", text: "『這絕對是有人偷工減料吧......』", face: "deny" },
+    { name: "萊恩？", text: "你不再是我萊恩·史凱爾的朋友了。" },
+    { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "deny",action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 445, y: 150, ms: 500 } },
+    { name: "  ", text: "萊恩一臉失落(雖然其實根本看不到表情)的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 445, y: 170, ms: 500 } },
   ]
 };
 
@@ -1758,3 +1764,4 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
