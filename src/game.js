@@ -513,7 +513,12 @@ const DIALOGS = {
     { name: "萊恩？", text: "你不再是我萊恩·史凱爾的朋友了。" },
     { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "deny",action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 445, y: 150, ms: 500 } },
-    { name: "  ", text: "萊恩一臉失落(雖然其實根本看不到表情)的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 445, y: 170, ms: 500 } },
+    { name: "  ", text: "萊恩一臉失落(雖然其實根本看不到表情)的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 445, y: 170, ms: 600 } },
+    { name: "千冬歲", text: "你這個邪惡的妖師！現在竟然還對萊恩進行精神攻擊！！！", action: { type: "jump", actor: "qian" } },
+    { name: "褚冥漾", text: "千冬歲你睜開眼睛看看啊！我不信你兩眼空空看不清楚是誰在傷害萊恩！！！", face: "deny" },
+    { name: "千冬歲", text: "閉嘴！你這個背叛者沒資格喊我的名字，聽了就噁心!", action: { type: "jump", actor: "qian" } },
+    { name: "褚冥漾", text: "到底是怎樣啊！！！", face: "deny", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+
   ]
 };
 
@@ -1764,4 +1769,5 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
