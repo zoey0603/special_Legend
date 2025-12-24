@@ -484,16 +484,19 @@ const DIALOGS = {
  ]},
     { name: "褚冥漾", text: "......蛤？", face: "shock" },
     { name: "褚冥漾", text: "『他說的那個夏碎哥是我知道的那個夏碎嗎？』", face: "really" },
+    { name: "褚冥漾", text: "『應該......？是......吧？』", face: "really" },
     { name: "褚冥漾", text: "『我打夏碎？真的假的？』", face: "really" },
     { name: "褚冥漾", text: "修但幾類，你先冷靜一點千冬歲......", face: "really" },
-    { name: "  ", text: "話還來不及說完，遠處又傳來一道聲音打斷褚冥漾的辯解。" },
-    { name: "？？？", text: "你竟然做出這麼殘忍的事！" },
+    { name: "  ", text: "一句｢你是不是認錯人了？｣還沒說出口，遠處又傳來一道聲音打斷褚冥漾的辯解。" },
+    { name: "？？？", text: "沒想到你竟然做出這麼殘忍的事！" },
     { name: "米可蕥", text: "喵喵對你實在是太失望了！" , action: [ 
       { type: "runTo", actor: "qian", x: 445, y: 170, ms: 500 }, 
       { type: "show", actor: "cat" },
       { type: "runTo", actor: "cat", x: 425, y: 196, ms: 450 }
     ]},
-    { name: "米可蕥", text: "喵喵一直以來都看錯人了！",action: { type: "jump", actor: "cat" } },
+    { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！",action: { type: "jump", actor: "cat" } },
+    { name: "褚冥漾", text: "喵喵？！" },
+    
   ]
 };
 
@@ -1682,10 +1685,18 @@ update() {
   if (this.cursors.up.isDown) vy = -speed;
   else if (this.cursors.down.isDown) vy = speed;
 
+  // ✅ 新增：左右鍵改面向（用 flipX 鏡像）
+  if (vx < 0) {
+    this.player.facing = "left";
+    this.player.setFlipX(true);
+  } else if (vx > 0) {
+    this.player.facing = "right";
+    this.player.setFlipX(false);
+  }
+  // vx==0（只走上下或停住）就保持上一個 facing，不動
+
   this.player.body.setVelocity(vx, vy);
 }
-
-
 }
 
 const config = {
