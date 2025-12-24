@@ -495,7 +495,7 @@ const DIALOGS = {
       { type: "runTo", actor: "cat", x: 425, y: 196, ms: 450 }
     ]},
     { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！",action: { type: "jump", actor: "cat" } },
-    { name: "褚冥漾", text: "喵喵？！" },
+    { name: "褚冥漾", text: "喵喵？！", face: "shock" },
     
   ]
 };
@@ -1725,3 +1725,4 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
