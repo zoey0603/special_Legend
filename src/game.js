@@ -2201,4 +2201,3 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
-
