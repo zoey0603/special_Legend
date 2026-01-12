@@ -345,6 +345,8 @@ const PORTRAITS = {
     really: "assets/img/chu_portrait_WTF.png",
     wtf: "assets/img/chu_portrait_shit.png",
     uh: "assets/img/chu_portrait_uh.png",
+    cry: "assets/img/chu_portrait_cry.png",
+    nolove: "assets/img/chu_portrait_nolove.png",
   },
   "冰炎": {
     normal: "assets/img/bing_portrait.png",
@@ -406,7 +408,7 @@ const STAGE_SPAWN = {
 
 const WHITE_GARDEN_TRIGGERS = [
   // 你可以依地圖調整座標/大小
-  { id: "white_garden", x: 540, y: 190, w: 20, h: 75, once: true, fired: false },
+  { id: "white_garden", x: 560, y: 190, w: 20, h: 75, once: true, fired: false },
   // { id: "pond_event", x: 340, y: 120, w: 70, h: 50, once: false, fired: false },
 ];
 
@@ -485,7 +487,7 @@ const DIALOGS = {
   ],
 
   white_garden: [
-    { name: "  ", text: "再一次睜眼，白園青草藍天、微風中有著花草香。" },
+    { name: "  ", text: "再一次睜眼，白園青草藍天、吹拂過臉上的微風中帶有著花草香。" },
     { name: "  ", text: "褚冥漾看著附近的大樹，上頭空氣精靈開心的唱歌跳舞。" },
     { name: "  ", text: "驀然間，一道聲音打破這樣的寧靜。" },
     { name: "？？？", text: "褚冥漾——你這個背叛者！" },
@@ -556,7 +558,7 @@ const DIALOGS = {
       { type: "emote", actor: "angel", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
     ]},
     { name: "褚冥漾", text: "『嗯，終於來了個正常的。』"},
-    { name: "褚冥漾", text: "『但來的是最不正常的那一個......』", face: "uh" },
+    { name: "褚冥漾", text: "『但來的是最不正常的那一個......』", face: "cry" },
     { name: "  ", text: "安因微微瞇起眼睛，語氣溫和卻又帶著不可侵犯的氣勢：" },
     { name: "安因", text: "西瑞．羅耶伊亞同學，如今這個狀況，有必要再影響褚同學添一把亂嗎？" },
     { name: "西瑞", text: "乾你這個天使什麼事情？本大爺說好了要跟小弟浪跡天涯統治世界！" },
@@ -569,20 +571,64 @@ const DIALOGS = {
   ]},
     { name: "褚冥漾", text: "......西瑞？"},
     { name: "西瑞", text: "如果全世界都要殺本大爺小弟，那本大爺就帶著你殺光全世界，來一個殺一雙！" },
-    { name: "褚冥漾", text: "『......雖然我應該聽了要很感動，但不需要好嗎？然後你的數學成績是誰教的，猴子嗎？』", face: "uh" },
+    { name: "褚冥漾", text: "『......雖然我應該聽了要很感動，但不需要好嗎？然後你的數學成績是誰教的，猴子嗎？』", face: "nolove" },
     { name: "？？？", text: "褚冥漾！" },
     { name: "  ", text: "褚冥漾心累了，他眼神死的望向來人，是前幾天才見過面的水妖精，但不知道是哪一個。", action: [ 
       { type: "show", actor: "twins1" },
-      { type: "runTo", actor: "angel", x: 455, y: 255, ms: 500 },
+      { type: "runTo", actor: "angel", x: 435, y: 255, ms: 500 },
       { type: "runTo", actor: "twins1", x: 420, y: 205, ms: 500 } 
       ]},
-    { name: "雷多", text: "褚冥漾！你為甚麼要傷害伊多！！！" },
-    { name: "  ", text: "褚冥漾此時已經完全沒有驚恐、困惑以及吐槽的慾望，他只有一種｢嗯，果然如此」的感想。", face: "uh" },
-    { name: "雅多", text: "雷多，你清醒一點！",action: [
+    { name: "雷多", text: "褚冥漾！你為什麼要傷害伊多！！！" },
+    { name: "  ", text: "褚冥漾此時已經完全沒有驚恐、困惑以及吐槽的慾望，他只有一種｢嗯，果然如此」的感想。", face: "nolove" },
+    { name: "  ", text: "而此時，褚冥漾身後傳來了另一個與雷多聲線極為相似的男聲。" },
+    { name: "雅多", text: "雷多，你清醒一點！", action: [
   { type: "show", actor: "twins2" },
-  { type: "toPlayer", actor: "twins2", enterFrom: "right", enterDist: 260, side: "up", gapY: 1, ms: 450 },
+  { type: "toPlayer", actor: "twins2", enterFrom: "right", enterDist: 260, side: "right", gapY: 1, ms: 250 }
 ]},
-
+    { name: "雅多", text: "漾漾的實力哪有辦法打傷伊多！！", action: { type: "toPlayer", actor: "twins2", side: "up", gapY: 1, ms: 450 }},
+    { name: "褚冥漾", text: "『真是謝囉！！！』", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "  ", text: "聞聽此言，雷多原本憤怒如惡鬼的臉轉為困惑，紅色的雙眸逐漸變回溫潤的褐色，他張口欲言，卻又很快抿緊唇瓣，似乎是想不出更合理的理由反駁。" },
+    { name: "雷多", text: "可是......影像球上......" },
+    { name: "  ", text: "雷多似乎還想掙扎一下，可隨後一個溫潤的聲音打斷了他的思緒，也讓他的雙眸重新亮起。" },
+    { name: "伊多", text: "雷多。", action: [
+  { type: "show", actor: "bigbro" },
+  { type: "face", actor: "bigbro", dir: "left" },
+  { type: "toPlayer", actor: "bigbro", enterFrom: "right", enterDist: 260, side: "right", gapY: 1, ms: 450 },
+  ]},
+    { name: "雷多", text: "伊多！", action: { type: "toPlayer", actor: "bigbro", side: "down", gapY: 1, ms: 450 } },
+    { name: "  ", text: "伴隨著雷多驚喜的聲音，水妖精如風一般衝到伊多面前，擋在他身前面向眾人。", action: [
+  { type: "toActor", actor: "twins1", target: "bigbro", side: "left", gap: 1, speed: 200 },
+  { type: "face", actor: "twins1", dir: "left" }
+  ]},
+    { name: "雷多", text: "對不起，漾漾，我剛剛竟然懷疑你。" },
+    { name: "褚冥漾", text: "......沒關係。" },
+    { name: "褚冥漾", text: "『倒不如說我才想謝謝你相信我的實力。』", face: "cry" },
+    { name: "  ", text: "氣氛變得有些詭譎，水妖精三兄弟的談話皆被在場眾人聽進耳裡，不少人臉上都出現了動搖。" },
+    { name: "  ", text: "最後是千冬歲打破了詭異的平靜。" },
+    { name: "千冬歲", text: "大家不要被騙了！邪惡的妖師肯定是使用了言靈操控了獸王族跟水妖精三兄弟！", action: { type: "jump", actor: "qian" } },
+    { name: "褚冥漾", text: "千冬歲哩系中猴喔！！！你也太看得起我了吧！！！", face: "wtf", action: { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 } },
+    { name: "千冬歲", text: "大家都清楚你有怎樣強大的力量，不要再裝蒜了！" },
+    { name: "？？？", text: "沒錯。", action: [
+  { type: "show", actor: "ran" },
+  { type: "show", actor: "moon" }
+  ]},
+    { name: "  ", text: "來人聲音不大，卻一下吸引了所有人的注意——是白陵然。", action: [
+      { type: "runTo", actor: "ran", x: 435, y: 200, ms: 800 },
+      { type: "runTo", actor: "moon", x: 400, y: 205, ms: 600 } 
+    ]},
+    { name: "  ", text: "若是平時，在看到白陵然後，褚冥漾應該會感到安心，然而一堆好友腦袋突然變得不正常，加上白陵然和褚冥玥兩人凝重的臉色，讓褚冥漾有種非常、非常不好的預感。" },
+    { name: "  ", text: "白陵然率先開口，他幾乎是用一種痛心疾首的表情看著褚冥漾，聲音很輕：" },
+    { name: "白陵然", text: "漾漾，你為什麼要傷害辛西亞？" },
+    { name: "褚冥漾", text: "......" },
+    { name: "褚冥漾", text: "......", face: "uh" },
+    { name: "褚冥漾", text: "......", face: "wtf" },
+    { name: "褚冥漾", text: "『我．就．知．道。』", face: "cry" },
+    { name: "褚冥漾", text: "『不，不對，我不知道，我根本不知道我怎麼做的。』", face: "cry" },
+    { name: "  ", text: "在褚冥漾還沒反應過來前，這次換褚冥玥咬著牙開口了。" },
+    { name: "褚冥玥", text: "漾漾，辛西亞從來沒有虧待過你，她還做綠豆湯給你喝，為什麼要傷害她？" },
+    { name: "褚冥漾", text: "......", face: "shock" },
+    { name: "褚冥漾", text: "......", face: "deny" },
+    { name: "褚冥漾", text: "你是誰？！！你！絕！對！不！是！我！姊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
   ]
 };
 
@@ -1307,6 +1353,79 @@ if (action.type === "toPlayer") {
     });
   });
 }
+
+if (action.type === "toActor") {
+  const actor = getActor(action.actor);
+  const target = getActor(action.target); // 👈 目標人物
+  if (!actor || !target) return Promise.resolve();
+
+  const side = action.side ?? "auto"; // left/right/up/down/auto
+  const gapX = action.gapX ?? action.gap ?? 10;
+  const gapY = action.gapY ?? action.gap ?? 10;
+  const speed = action.speed ?? 220;
+  const ease = action.ease ?? "Linear";
+
+  // ✅ 進場（可選）：先放到目標某側，再跑過來
+  if (action.enterFrom === "right" || action.enterFrom === "left") {
+    const sign = action.enterFrom === "right" ? 1 : -1;
+    const enterDist = action.enterDist ?? 220;
+    actor.x = target.x + sign * enterDist;
+    if (action.matchY !== false) actor.y = target.y;
+  } else if (action.enterFrom === "up" || action.enterFrom === "down") {
+    const sign = action.enterFrom === "down" ? 1 : -1;
+    const enterDist = action.enterDist ?? 160;
+    actor.y = target.y + sign * enterDist;
+    if (action.matchX !== false) actor.x = target.x;
+  }
+
+  const halfW_A = (actor.displayWidth ?? 0) * 0.5;
+  const halfW_T = (target.displayWidth ?? 0) * 0.5;
+  const halfH_A = (actor.displayHeight ?? 0) * 0.5;
+  const halfH_T = (target.displayHeight ?? 0) * 0.5;
+
+  const offsetX = action.offsetX ?? (halfW_A + halfW_T + gapX);
+  const offsetY = action.offsetY ?? (halfH_A + halfH_T + gapY);
+
+  let targetX = actor.x;
+  let targetY = actor.y;
+
+  const pickAuto = () => {
+    const dx = Math.abs(actor.x - target.x);
+    const dy = Math.abs(actor.y - target.y);
+    if (dx >= dy) return actor.x <= target.x ? "left" : "right";
+    return actor.y <= target.y ? "up" : "down";
+  };
+
+  const finalSide = side === "auto" ? pickAuto() : side;
+
+  if (finalSide === "left") {
+    targetX = target.x - offsetX;
+    if (action.matchY !== false) targetY = target.y;
+  } else if (finalSide === "right") {
+    targetX = target.x + offsetX;
+    if (action.matchY !== false) targetY = target.y;
+  } else if (finalSide === "up") {
+    targetY = target.y - offsetY;
+    if (action.matchX !== false) targetX = target.x;
+  } else if (finalSide === "down") {
+    targetY = target.y + offsetY;
+    if (action.matchX !== false) targetX = target.x;
+  }
+
+  const dist = Phaser.Math.Distance.Between(actor.x, actor.y, targetX, targetY);
+  const ms = action.ms ?? Math.max(120, Math.round((dist / speed) * 1000));
+
+  return new Promise((resolve) => {
+    scene.tweens.add({
+      targets: actor,
+      x: targetX,
+      y: targetY,
+      duration: ms,
+      ease,
+      onComplete: resolve,
+    });
+  });
+}
   
   // ✅ 等待（節奏控制）
   if (action.type === "wait") {
@@ -1704,6 +1823,7 @@ if (action.type === "face") {
     twins1: "twins1_front",
     twins2: "twins2_front",
     bigbro: "bigbro_front",
+    coffee: "coffee_front",
     chu: "chu_front",
   };
 
