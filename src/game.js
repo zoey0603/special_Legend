@@ -185,6 +185,11 @@ function saveGame() {
     gameFinished: !!gameFinished,
     player: scene?.player ? { x: scene.player.x, y: scene.player.y } : null,
     stage: window.__STAGE__ || "prologue_fire",
+    playerFacing: scene?.player?.facing ?? "right",
+    playerFlipX: !!scene?.player?.flipX,
+    whiteGardenFired: Object.fromEntries(
+      WHITE_GARDEN_TRIGGERS.map(t => [t.id, !!t.fired])
+    ),
   };
   localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
   refreshContinueButton();
@@ -281,6 +286,7 @@ function startNewGame() {
   storyIndex = 0;
   currentDialogId = STORY_FLOW[0];
   dialogOpen = false;
+
   for (const cfg of WHITE_GARDEN_TRIGGERS) cfg.fired = false;
   const scene = window.__SCENE__;
   if (scene?.input?.keyboard) scene.input.keyboard.resetKeys();
@@ -312,6 +318,10 @@ function continueGame() {
   currentDialogId = data.currentDialogId ?? STORY_FLOW[0];
   dialogOpen = !!data.dialogOpen;   // ✅ 還原
 
+  const firedMap = data.whiteGardenFired || {};
+  for (const cfg of WHITE_GARDEN_TRIGGERS) {
+    cfg.fired = !!firedMap[cfg.id];
+  }
   const scene = window.__SCENE__;
   if (scene?.input?.keyboard) scene.input.keyboard.resetKeys();
 
@@ -332,7 +342,9 @@ const PORTRAITS = {
     blood: "assets/img/chu_portrait_blood.png",
     shock: "assets/img/chu_portrait_shock.png",
     deny: "assets/img/chu_portrait_deny.png",
-    really: "assets/img/chu_portrait_WTF.png"
+    really: "assets/img/chu_portrait_WTF.png",
+    wtf: "assets/img/chu_portrait_shit.png",
+    uh: "assets/img/chu_portrait_uh.png",
   },
   "冰炎": {
     normal: "assets/img/bing_portrait.png",
@@ -366,14 +378,12 @@ const TILEMAPS = {
     mapFile: "assets/maps/prologue_fire.tmj",
     tilesets: COMMON_TILESETS,
     collisionLayerNames: ["Collision"],   // ✅ 改成 TMJ 真的有的 layer 名
-    foregroundLayerNames: ["草叢下"],          // （可選）要遮擋玩家的層
   },
   white_garden: {
     mapKey: "map_white_garden",
     mapFile: "assets/maps/white_garden.tmj",
     tilesets: COMMON_TILESETS,
     collisionLayerNames: ["Collision"],
-    foregroundLayerNames: ["草叢下"],
   },
   blackhall: {
     mapKey: "map_blackhall",
@@ -396,7 +406,7 @@ const STAGE_SPAWN = {
 
 const WHITE_GARDEN_TRIGGERS = [
   // 你可以依地圖調整座標/大小
-  { id: "white_garden_event1", x: 320, y: 140, w: 60, h: 60, once: true, fired: false },
+  { id: "white_garden", x: 540, y: 190, w: 20, h: 75, once: true, fired: false },
   // { id: "pond_event", x: 340, y: 120, w: 70, h: 50, once: false, fired: false },
 ];
 
@@ -412,11 +422,14 @@ const DIALOGS = {
     { name: "  ", text: "頓時就像頭被人重擊暈眩不已，等到思緒清晰後人已在校園內。" },
     { name: "  ", text: "看著腳下的殘骸，入眼的面孔有些熟悉、有些有印象、有些陌生不已，但表情全是生前遭受到重大攻擊的驚恐與絕望。" },
     { name: "  ", text: "即便是他這樣早已走過許多荊棘、歷盡許多的人，胃都還是忍不住翻騰。" },
-    { name: "褚冥漾", text: "唔......嘔......" },
+    { name: "褚冥漾", text: "唔......嘔......", face: "uh" },
     { name: "  ", text: "摀住嘴，褚冥漾長年累積的沉穩不允許他此時露出脆弱。" },
     { name: "  ", text: "他掏出米納斯對著地板開出一槍，以水氣在自己周遭隔開出較為清爽的空間。" },
     { name: "  ", text: "在不破壞周遭一切的情況下，他回過身想找到夥伴們會合，了解到底發生什麼事情，還有現況到底是怎麼回事。", action: { type: "face", actor: "chu", dir: "left" } },
-    { name: "  ", text: "卻沒想到在自己轉身的那一剎，不知何時自己身後卻站著一個人——可利器卻已沒入自己胸口。", action: { type: "dashBehind", actor: "bing", target: "chu", dx: -10, dy: 0, ms: 220 } },
+    { name: "  ", text: "卻沒想到在自己轉身的那一剎，不知何時自己身後卻站著一個人——可利器卻已沒入自己胸口。", action: [
+     { type: "set", actor: "bing", key: "__forcedFlipX", value: true },
+     { type: "dashBehind", actor: "bing", target: "chu", dx: -10, dy: 0, ms: 220 } 
+     ]},
     { name: "  ", text: "他瞪大眼睛詫異，憑他的能力居然沒發覺身後有人。" },
     { name: "  ", text: "而當他看清來者時，詫異被不可置信給取代。" },
     { name: "  ", text: "沒入體內的兇器是他再熟悉不能的峰云凋戈。順著槍身，他看到那白皙蔥指有著微不可察的顫抖。" },
@@ -457,8 +470,7 @@ const DIALOGS = {
     { type: "sitUp", actor: "chu", ms: 450 },
     { type: "flashWhite", peak: 0.8, msIn: 60, msOut: 220 },
     { type: "fadeBlack", to: 0, ms: 450 }
-  ],
-  auto: true},
+  ]},
     { name: "褚冥漾", text: "哈！", face: "shock" },
     { name: "  ", text: "從床上直起身，褚冥漾額角佈滿冷汗。他環顧四周，昏暗的空間、窗外點點繁星。" },
     { name: "  ", text: "褚冥漾摸著胸口，不禁鬆口氣。" },
@@ -477,7 +489,7 @@ const DIALOGS = {
     { name: "  ", text: "褚冥漾看著附近的大樹，上頭空氣精靈開心的唱歌跳舞。" },
     { name: "  ", text: "驀然間，一道聲音打破這樣的寧靜。" },
     { name: "？？？", text: "褚冥漾——你這個背叛者！" },
-    { name: "  ", text: "回過身褚冥漾看向來者，只見對方手舉著一把它熟悉到不能再熟悉的長弓，指著他吶喊他是背叛者。" },
+    { name: "  ", text: "回過身褚冥漾看向來者，只見對方手舉著一把它熟悉到不能再熟悉的長弓，指著他吶喊他是背叛者。", action: { type: "face", actor: "chu", dir: "left" } },
     { name: "千冬歲", text: "褚冥漾！你竟敢傷害夏碎哥！", action: [ 
       { type: "show", actor: "qian" },
       { type: "runTo", actor: "qian", x: 425, y: 196, ms: 450 }
@@ -488,36 +500,88 @@ const DIALOGS = {
     { name: "褚冥漾", text: "『我打夏碎？真的假的？』", face: "really" },
     { name: "褚冥漾", text: "修但幾類，你先冷靜一點千冬歲......", face: "really" },
     { name: "  ", text: "一句｢你是不是認錯人了？｣還沒說出口，遠處又傳來一道聲音打斷褚冥漾的辯解。" },
-    { name: "？？？", text: "沒想到你竟然做出這麼殘忍的事！" },
+    { name: "？？？", text: "你為什麼要率領鬼族攻擊公會的醫療班？" },
     { name: "米可蕥", text: "喵喵對你實在是太失望了！" , action: [ 
-      { type: "runTo", actor: "qian", x: 445, y: 170, ms: 500 }, 
+      { type: "runTo", actor: "qian", x: 450, y: 170, ms: 500 }, 
       { type: "show", actor: "cat" },
       { type: "runTo", actor: "cat", x: 425, y: 196, ms: 450 }
     ]},
     { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！",action: { type: "jump", actor: "cat" } },
     { name: "褚冥漾", text: "喵喵？！", face: "shock" },
-    { name: "米可蕥", text: "沒想到你竟然還不承認罪刑！",action: { type: "jump", actor: "cat" } },
-    { name: "褚冥漾", text: "你們有給我辯解的機會嗎！！！", face: "really" },
-    { name: "  ", text: "這時，米可蕥往旁邊移動了些，給來人讓出些位置。" , action: [ 
-      { type: "runTo", actor: "qian", x: 445, y: 170, ms: 500 }, 
-      { type: "runTo", actor: "cat", x: 415, y: 170, ms: 500 },
+    { name: "米可蕥", text: "沒想到你到現在竟然還不承認罪刑！",action: { type: "jump", actor: "cat" } },
+    { name: "褚冥漾", text: "你們有給我辯解的機會嗎！！！", face: "wtf" },
+    { name: "  ", text: "這時，米可蕥往旁邊移動了些，給來人讓出些位置。", action: [ 
+      { type: "runTo", actor: "qian", x: 450, y: 165, ms: 500 }, 
+      { type: "runTo", actor: "cat", x: 405, y: 170, ms: 500 },
       { type: "show", actor: "ryan" },
       { type: "runTo", actor: "ryan", x: 420, y: 196, ms: 500 }
     ]},
-    { name: "米可蕥", text: "你看！把萊恩打得都只能隱身了！",action: { type: "jump", actor: "cat" } },
+    { name: "米可蕥", text: "你看！把萊恩打得都只能隱身了！", action: { type: "jump", actor: "cat" } },
     { name: "萊恩？", text: "......" },
     { name: "褚冥漾", text: "......" },
-    { name: "褚冥漾", text: "屁啦！！！", face: "deny",action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "屁啦！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "褚冥漾", text: "『槽點太多了不知道該從哪裡開始吐槽......』", face: "deny" },
-    { name: "褚冥漾", text: "『這絕對是有人偷工減料吧......』", face: "deny" },
+    { name: "褚冥漾", text: "『這絕對是有人偷工減料吧......』", face: "wtf" },
     { name: "萊恩？", text: "你不再是我萊恩·史凱爾的朋友了。" },
-    { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "deny",action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
-    { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 445, y: 150, ms: 500 } },
-    { name: "  ", text: "萊恩一臉失落(雖然其實根本看不到表情)的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 445, y: 170, ms: 600 } },
+    { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "really", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 455, y: 145, ms: 500 } },
+    { name: "  ", text: "萊恩一臉失落(雖然其實根本看不到表情)的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 440, y: 167, ms: 600 } },
     { name: "千冬歲", text: "你這個邪惡的妖師！現在竟然還對萊恩進行精神攻擊！！！", action: { type: "jump", actor: "qian" } },
-    { name: "褚冥漾", text: "千冬歲你睜開眼睛看看啊！我不信你兩眼空空看不清楚是誰在傷害萊恩！！！", face: "deny" },
+    { name: "褚冥漾", text: "千冬歲你睜開眼睛看看啊！我不信你兩眼空空看不清楚是誰在傷害萊恩！！！", face: "wtf" },
     { name: "千冬歲", text: "閉嘴！你這個背叛者沒資格喊我的名字，聽了就噁心!", action: { type: "jump", actor: "qian" } },
-    { name: "褚冥漾", text: "到底是怎樣啊！！！", face: "deny", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "到底是怎樣啊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "  ", text: "在褚冥漾怒吼完後，遠處再次傳來一個聲音。" },
+    { name: "？？？", text: "褚冥漾！勸你乖乖束手就擒！" },
+    { name: "褚冥漾", text: "還來啊......這次又是誰？", face: "really" },
+    { name: "  ", text: "出場的人有著一頭流沙般華美的金髮，潔白的翅膀和一身黑袍，身分不言而喻。", action: [ 
+      { type: "show", actor: "angel" },
+      { type: "runTo", actor: "angel", x: 420, y: 200, ms: 500 }
+    ]},
+    { name: "安因", text: "為什麼......要傷害賽塔？" },
+    { name: "褚冥漾", text: "......" },
+    { name: "褚冥漾", text: "......", face: "uh" },
+    { name: "褚冥漾", text: "......哩喜勒靠！！！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "安因你不是天使嗎？！你要不要聽聽看你在說甚麼？！！！", face: "wtf" },
+    { name: "褚冥漾", text: "我打賽塔？？！！那像話嗎？！", face: "wtf" },
+    { name: "褚冥漾", text: "我怎麼打？？！用米納斯嗎？！他隨便一個肘擊就能把我肋骨打斷了好嗎！！！", face: "wtf" },
+    { name: "安因", text: "漾漾，天堂地獄一念之間，路是自己走出來的，別把自己的路走絕了，好嗎？" },
+    { name: "褚冥漾", text: "......我唯一的路就是跑路。", face: "uh" },
+    { name: "安因", text: "那就沒辦法了......褚冥漾，我奉公會之令，在此討伐你。" },
+    { name: "褚冥漾", text: "聽我說話啊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "西瑞", text: "漾～要統治世界怎麼不找本大爺～", action: [ 
+      { type: "show", actor: "five" },
+      { type: "runTo", actor: "five", x: 420, y: 200, ms: 300 },
+      { type: "sfx", key: "hit", volume: 0.3 },
+      { type: "runTo", actor: "angel", x: 430, y: 225, ms: 400 },
+      { type: "emote", actor: "angel", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
+    ]},
+    { name: "褚冥漾", text: "『嗯，終於來了個正常的。』"},
+    { name: "褚冥漾", text: "『但來的是最不正常的那一個......』", face: "uh" },
+    { name: "  ", text: "安因微微瞇起眼睛，語氣溫和卻又帶著不可侵犯的氣勢：" },
+    { name: "安因", text: "西瑞．羅耶伊亞同學，如今這個狀況，有必要再影響褚同學添一把亂嗎？" },
+    { name: "西瑞", text: "乾你這個天使什麼事情？本大爺說好了要跟小弟浪跡天涯統治世界！" },
+    { name: "褚冥漾", text: "『不對，我根本沒說好好嗎？』", face: "uh" },
+    { name: "安因", text: "這可不行，別說我們同不同意，公會已經下達命令，我們有責任阻止——妖師的叛變。" },
+    { name: "西瑞", text: "哈！你想打架嗎？老子奉陪！" },
+    { name: "  ", text: "就在褚冥漾思考要不要阻止眼前的一切或乾脆趁機跑路時，不知何時，西瑞已經走到了褚冥漾身前將他護在身後。", action: [ 
+      { type: "toPlayer", actor: "five", side: "auto", gap: 1 },
+      { type: "face", actor: "five", dir: "left" }
+  ]},
+    { name: "褚冥漾", text: "......西瑞？"},
+    { name: "西瑞", text: "如果全世界都要殺本大爺小弟，那本大爺就帶著你殺光全世界，來一個殺一雙！" },
+    { name: "褚冥漾", text: "『......雖然我應該聽了要很感動，但不需要好嗎？然後你的數學成績是誰教的，猴子嗎？』", face: "uh" },
+    { name: "？？？", text: "褚冥漾！" },
+    { name: "  ", text: "褚冥漾心累了，他眼神死的望向來人，是前幾天才見過面的水妖精，但不知道是哪一個。", action: [ 
+      { type: "show", actor: "twins1" },
+      { type: "runTo", actor: "angel", x: 455, y: 255, ms: 500 },
+      { type: "runTo", actor: "twins1", x: 420, y: 205, ms: 500 } 
+      ]},
+    { name: "雷多", text: "褚冥漾！你為甚麼要傷害伊多！！！" },
+    { name: "  ", text: "褚冥漾此時已經完全沒有驚恐、困惑以及吐槽的慾望，他只有一種｢嗯，果然如此」的感想。", face: "uh" },
+    { name: "雅多", text: "雷多，你清醒一點！",action: [
+  { type: "show", actor: "twins2" },
+  { type: "toPlayer", actor: "twins2", enterFrom: "right", enterDist: 260, side: "up", gapY: 1},
+]},
 
   ]
 };
@@ -591,6 +655,94 @@ function shouldryanBeVisible(lines, idx) {
   return false;
 }
 
+function shouldAngelBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "angel")) return true;
+  }
+  return false;
+}
+
+function shouldFiveBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "five")) return true;
+  }
+  return false;
+}
+
+function shouldMoonBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "moon")) return true;
+  }
+  return false;
+}
+
+function shouldRanBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "ran")) return true;
+  }
+  return false;
+}
+
+function shouldTwins1BeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "twins1")) return true;
+  }
+  return false;
+}
+
+function shouldTwins2BeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "twins2")) return true;
+  }
+  return false;
+}
+
+function shouldBroBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "bigbro")) return true;
+  }
+  return false;
+}
+
+function shouldCoffeeBeVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "Coffee")) return true;
+  }
+  return false;
+}
+
 function flattenActions(action) {
   if (!action) return [];
   return Array.isArray(action) ? action.filter(Boolean) : [action];
@@ -613,14 +765,28 @@ function applyStoryWorldState(scene) {
   const qian = scene.actors.qian;
   const cat = scene.actors.cat;
   const ryan = scene.actors.ryan;
-
+  const angel = scene.actors.angel;
+  const five = scene.actors.five;
+  const moon = scene.actors.moon;
+  const ran = scene.actors.ran;
+  const twins1 = scene.actors.twins1;
+  const twins2 = scene.actors.twins2;
+  const bigbro = scene.actors.bigbro;
+  const coffee = scene.actors.coffee;
 
   // ---- 預設：先清掉殘留（重要） ----
   if (bing?.setVisible) bing.setVisible(false);
   if (qian?.setVisible) qian.setVisible(false);
   if (cat?.setVisible) cat.setVisible(false);
   if (ryan?.setVisible) ryan.setVisible(false);
-
+  if (angel?.setVisible) angel.setVisible(false);
+  if (five?.setVisible) five.setVisible(false);
+  if (moon?.setVisible) moon.setVisible(false);
+  if (ran?.setVisible) ran.setVisible(false);
+  if (twins1?.setVisible) twins1.setVisible(false);
+  if (twins2?.setVisible) twins2.setVisible(false);
+  if (bigbro?.setVisible) bigbro.setVisible(false);
+  if (coffee?.setVisible) coffee.setVisible(false);
 
   // ========== A) prologue_fire：冰炎 ==========
   if (currentDialogId === "prologue_fire" && bing && chu) {
@@ -688,6 +854,39 @@ if (currentDialogId === "white_garden" && cat) {
 if (currentDialogId === "white_garden" && ryan) {
   ryan.setVisible(shouldryanBeVisible(lines, idx));
 }
+
+if (currentDialogId === "white_garden" && angel) {
+  angel.setVisible(shouldAngelBeVisible(lines, idx));
+}
+
+if (currentDialogId === "white_garden" && five) {
+  five.setVisible(shouldFiveBeVisible(lines, idx));
+}
+
+if (currentDialogId === "white_garden" && moon) {
+  moon.setVisible(shouldMoonBeVisible(lines, idx));
+}
+  
+if (currentDialogId === "white_garden" && ran) {
+  ran.setVisible(shouldRanBeVisible(lines, idx));
+}
+
+if (currentDialogId === "white_garden" && twins1) {
+  twins1.setVisible(shouldTwins1BeVisible(lines, idx));
+}
+
+if (currentDialogId === "white_garden" && twins2) {
+  twins2.setVisible(shouldTwins2BeVisible(lines, idx));
+}
+
+if (currentDialogId === "white_garden" && bigbro) {
+  bigbro.setVisible(shouldBroBeVisible(lines, idx));
+}
+
+if (currentDialogId === "white_garden" && coffee) {
+  coffee.setVisible(shouldCoffeeBeVisible(lines, idx));
+}
+
 }
 
 function lineHasGotoStage(line) {
@@ -1003,7 +1202,6 @@ if (ingameMode === "saveConfirm") {
 }, { capture:true });
 refreshContinueButton();
 
-
 function runAction(action) {
   if (!action) return Promise.resolve();
 
@@ -1034,6 +1232,78 @@ function runAction(action) {
       duration: ms,
       ease: action.ease ?? "Quad.easeOut",
       onComplete: resolve
+    });
+  });
+}
+
+if (action.type === "toPlayer") {
+  const actor = getActor(action.actor);
+  const player = getActor(action.player ?? "player") || scene.player; // 依你專案命名
+  if (!actor || !player) return Promise.resolve();
+
+  const side = action.side ?? "auto" | "left" | "right" | "up" | "down"; // "auto" | "left" | "right"
+  const gapX = action.gapX ?? action.gap ?? 10;
+  const gapY = action.gapY ?? action.gap ?? 10;
+  const speed = action.speed ?? 220;  // px/s（用距離算時間）
+  const ease = action.ease ?? "Linear";
+
+  // ✅ 新增：從哪邊「進場」(會先把 actor 放到玩家某側再開始跑)
+  // enterFrom: "left" | "right" | undefined
+  if (action.enterFrom === "right" || action.enterFrom === "left") {
+    const sign = action.enterFrom === "right" ? 1 : -1;
+    const enterDist = action.enterDist ?? 220;   // 進場起點離玩家多遠
+    actor.x = player.x + sign * enterDist;
+    if (action.matchY !== false) actor.y = player.y;
+  }
+   // 估算角色與玩家的「占位尺寸」
+  const halfW_A = (actor.displayWidth ?? 0) * 0.5;
+  const halfW_P = (player.displayWidth ?? 0) * 0.5;
+  const halfH_A = (actor.displayHeight ?? 0) * 0.5;
+  const halfH_P = (player.displayHeight ?? 0) * 0.5;
+  // ✅ 允許你用 offsetX/offsetY 覆蓋自動距離
+  const offsetX = action.offsetX ?? (halfW_A + halfW_P + gapX);
+  const offsetY = action.offsetY ?? (halfH_A + halfH_P + gapY);
+
+  // 決定最終要站哪裡
+  let targetX = actor.x;
+  let targetY = actor.y;
+
+  const pickAuto = () => {
+    // auto：選離玩家較遠的軸，避免斜角怪（也可改成你偏好）
+    const dx = Math.abs(actor.x - player.x);
+    const dy = Math.abs(actor.y - player.y);
+    if (dx >= dy) return actor.x <= player.x ? "left" : "right";
+    return actor.y <= player.y ? "up" : "down";
+  };
+
+  const finalSide = side === "auto" ? pickAuto() : side;
+
+  if (finalSide === "left") {
+    targetX = player.x - offsetX;
+    if (action.matchY !== false) targetY = player.y;
+  } else if (finalSide === "right") {
+    targetX = player.x + offsetX;
+    if (action.matchY !== false) targetY = player.y;
+  } else if (finalSide === "up") {
+    targetY = player.y - offsetY;
+    if (action.matchX !== false) targetX = player.x;
+  } else if (finalSide === "down") {
+    targetY = player.y + offsetY;
+    if (action.matchX !== false) targetX = player.x;
+  }
+
+  // 走路時間（或直接指定 action.ms）
+  const dist = Phaser.Math.Distance.Between(actor.x, actor.y, targetX, targetY);
+  const ms = action.ms ?? Math.max(120, Math.round((dist / speed) * 1000));
+
+  return new Promise((resolve) => {
+    scene.tweens.add({
+      targets: actor,
+      x: targetX,
+      y: targetY,
+      duration: ms,
+      ease,
+      onComplete: resolve,
     });
   });
 }
@@ -1108,8 +1378,9 @@ if (action.type === "gotoStage") {
   else scene.player.setPosition(sp.x, sp.y);
   // ✅ 記錄目前 stage（給 trigger 系統判斷用）
   window.__STAGE__ = stage;
-
-  scene.enableWhiteGardenTriggers?.(stage === "white_garden");
+  // ✅ 白園 triggers 開關（這行不能少）
+  scene.applyStageTriggers?.(stage);
+  console.log("[gotoStage]", stage, "whiteTriggers len =", scene.whiteTriggers?.length);
   return Promise.resolve();
 }
 
@@ -1158,16 +1429,78 @@ if (action.type === "flashWhite") {
     });
   }
 
-  // 瞬移到另一個角色後方 / 旁邊
-  if (action.type === "teleportBehind") {
-    const actor = getActor(action.actor);
-    const target = getActor(action.target);
-    if (!actor || !target) return Promise.resolve();
-    actor.setVisible(true);
-    actor.x = target.x + (action.dx ?? -18);
-    actor.y = target.y + (action.dy ?? 0);
-    return Promise.resolve();
-  }
+if (action.type === "emote") {
+  const actor = getActor(action.actor);
+  if (!actor) return Promise.resolve();
+
+  const key = action.key ?? "angry";
+  const ms = action.ms ?? 700;
+
+  // 頭上位置：角色中心 + 往上抬（依你的角色圖大小可再調）
+  const dx = action.dx ?? 0;
+  const dy = action.dy ?? -18;
+  const headY = actor.y - (actor.displayHeight * 0.5);
+
+  const em = scene.add.image(actor.x + dx, headY + dy, key)
+    .setOrigin(0.5, 1)
+    .setDepth((actor.depth ?? 0) + 50)
+    .setAlpha(0)
+    .setScale(action.scale ?? 0.9);
+
+  return new Promise((resolve) => {
+    const baseScale = action.scale ?? 0.2;
+
+    em.setScale(baseScale * 0.9);
+    // 彈出 + 小上浮
+    scene.tweens.add({
+      targets: em,
+      alpha: 1,
+      scale: baseScale,
+      y: em.y - 6,
+      duration: 140,
+      ease: "Back.Out",
+    });
+
+    // 晃動（像生氣抖一下）
+    scene.tweens.add({
+      targets: em,
+      angle: { from: -10, to: 10 },
+      duration: 70,
+      yoyo: true,
+      repeat: 3,
+      ease: "Sine.InOut",
+      delay: 80,
+    });
+
+    // 收尾淡出
+    scene.tweens.add({
+      targets: em,
+      alpha: 0,
+      y: em.y - 16,
+      duration: 180,
+      ease: "Quad.In",
+      delay: Math.max(0, ms - 180),
+      onComplete: () => {
+        em.destroy();
+        resolve();
+      },
+    });
+  });
+}
+
+if (action.type === "sfx") {
+  const key = action.key ?? "hit";
+  const volume = action.volume ?? 1;
+  const rate = action.rate ?? 1;
+  const detune = action.detune ?? 0;
+
+  // allowMultiple=false 會避免同音效疊太多（可選）
+  if (action.allowMultiple === false) scene.sound.stopByKey(key);
+
+  scene.sound.play(key, { volume, rate, detune });
+
+  return Promise.resolve(); // 播放不用等，直接往下跑劇情
+}
 
   // 衝刺到某角色背後（動畫）
   if (action.type === "dashBehind") {
@@ -1347,28 +1680,36 @@ if (action.type === "face") {
   const dir = action.dir;
   actor.facing = dir;
 
-  // ✅ bing：用 flipX 表示左右
+  // ✅ bing：保留你原本的特殊處理
   if (action.actor === "bing") {
-  if (actor.__forcedFlipX === true) {
-    actor.setFlipX(true);
-    actor.facing = "left";
+    if (actor.__forcedFlipX === true) {
+      actor.setFlipX(true);
+      actor.facing = "left";
+      actor.setTexture("bing_front");
+      return Promise.resolve();
+    }
+
+    if (dir === "left") actor.setFlipX(true);
+    else if (dir === "right") actor.setFlipX(false);
+
     actor.setTexture("bing_front");
     return Promise.resolve();
   }
+  // ✅ 其他角色：基礎面向右 → dir=left 就 flipX=true
+  actor.setFlipX(dir === "left");
 
-  if (dir === "left") actor.setFlipX(true);
-  else if (dir === "right") actor.setFlipX(false);
+  const TEX = {
+    qian: "qian_front",
+    five: "five_front",
+    twins1: "twins1_front",
+    twins2: "twins2_front",
+    bigbro: "bigbro_front",
+    chu: "chu_front",
+  };
 
-  actor.setTexture("bing_front");
+  actor.setTexture(TEX[action.actor] ?? "chu_front");
   return Promise.resolve();
-}
 
-  if (action.actor === "qian") return Promise.resolve();
-
-  if (dir === "left") actor.setFlipX(true);
-  else if (dir === "right") actor.setFlipX(false);
-  actor.setTexture("chu_front");
-  return Promise.resolve();
 }
 
 }
@@ -1386,11 +1727,17 @@ preload() {
   this.load.image("cat_front", "assets/img/cat_front.png");
   this.load.image("ryan_front", "assets/img/ryan_front.png");
   this.load.image("angel_front", "assets/img/angel_front.png");
+  this.load.image("five_front", "assets/img/five_front.png");
   this.load.image("moon_front", "assets/img/moon_front.png");
   this.load.image("ran_front", "assets/img/ran_front.png");
-
+  this.load.image("twins1_front", "assets/img/twins1_front.png");
+  this.load.image("twins2_front", "assets/img/twins2_front.png");
+  this.load.image("bigbro_front", "assets/img/bigbro_front.png");
+  this.load.image("coffee_front", "assets/img/coffee_front.png");
+  this.load.image("angry", "assets/img/angry.png"); 
   // 你如果之後有冰炎/第三人，也可以加
   // this.load.image("bing_front", "assets/bing_front.png");
+  this.load.audio("hit", "assets/audio/hit.mp3");
 
   for (const cfg of Object.values(TILEMAPS)) {
     this.load.tilemapTiledJSON(cfg.mapKey, cfg.mapFile);
@@ -1511,7 +1858,6 @@ for (const colName of collisionNames) {
     if (t.index !== -1) nonEmpty++;
     if (t.collides) collides++;
   });
-  console.log("[COL]", colName, { nonEmpty, collides });
 }
 }
 
@@ -1550,6 +1896,14 @@ for (const colName of collisionNames) {
     qian: this.add.sprite(240, 200, "qian_front_red").setVisible(false),
     cat:  this.add.sprite(240, 200, "cat_front").setVisible(false),
     ryan: this.add.sprite(240, 200, "ryan_front").setVisible(false),
+    angel: this.add.sprite(240, 200, "angel_front").setVisible(false),
+    five: this.add.sprite(240, 200, "five_front").setVisible(false),
+    moon: this.add.sprite(240, 200, "moon_front").setVisible(false),
+    ran: this.add.sprite(240, 200, "ran_front").setVisible(false),
+    twins1: this.add.sprite(240, 200, "twins1_front").setVisible(false),
+    twins2: this.add.sprite(240, 200, "twins2_front").setVisible(false),
+    bigbro: this.add.sprite(240, 200, "bigbro_front").setVisible(false),
+    coffee: this.add.sprite(240, 200, "coffee_front").setVisible(false),
 
   };
 
@@ -1566,12 +1920,28 @@ for (const colName of collisionNames) {
   this.actors.qian.facing = "right";
   this.actors.cat.facing = "right";
   this.actors.ryan.facing = "right";
+  this.actors.angel.facing = "right";
+  this.actors.five.facing = "right";
+  this.actors.moon.facing = "right";
+  this.actors.ran.facing = "right";
+  this.actors.twins1.facing = "right";
+  this.actors.twins2.facing = "right";
+  this.actors.bigbro.facing = "right";
+  this.actors.coffee.facing = "right";
 
   // 角色比例
   this.actors.bing.setScale(1.08);
   this.actors.qian.setScale(1.02);
   this.actors.cat.setScale(0.89);
   this.actors.ryan.setScale(1.1);
+  this.actors.angel.setScale(1.1);
+  this.actors.five.setScale(1.02);
+  this.actors.moon.setScale(1.08);
+  this.actors.ran.setScale(1.08);
+  this.actors.twins1.setScale(1.11);
+  this.actors.twins2.setScale(1.11);
+  this.actors.bigbro.setScale(1.1);
+  this.actors.coffee.setScale(1.09);
 
   // 深度（你之後會用 layer depth 再蓋過這些）
   this.actors.chu.setDepth(30);
@@ -1579,6 +1949,14 @@ for (const colName of collisionNames) {
   this.actors.qian.setDepth(29);
   this.actors.cat.setDepth(29);
   this.actors.ryan.setDepth(29);
+  this.actors.angel.setDepth(29);
+  this.actors.five.setDepth(28);
+  this.actors.moon.setDepth(29);
+  this.actors.ran.setDepth(29);
+  this.actors.twins1.setDepth(29);
+  this.actors.twins2.setDepth(29);
+  this.actors.bigbro.setDepth(29);
+  this.actors.coffee.setDepth(29);
 
   // ============ GameState / 讀檔決定初始地圖 ============
   const gs = ensureGameState();
@@ -1621,45 +1999,93 @@ for (const colName of collisionNames) {
   });
 
   // ============ white garden triggers ============
+this.whiteTriggers = [];
+this._whiteTriggerOverlaps = [];
+
+// ✅ enable / disable（只做開關）
+const setZoneEnabled = (zone, enabled) => {
+  if (!zone?.body) return;
+  zone.body.enable = enabled;
+  zone.active = enabled;                 // ✅ 很重要
+  zone.body.updateFromGameObject?.();
+};
+
+// ✅ 只負責開關（不做建置）
+this.enableWhiteGardenTriggers = (enabled) => {
+  for (const t of this.whiteTriggers) setZoneEnabled(t.zone, enabled);
+};
+
+// ✅ 建置/重建 white garden triggers（可重複呼叫）
+this.buildWhiteGardenTriggers = () => {
+  // 1) 清掉舊 overlaps（避免重建後疊加）
+  if (this._whiteTriggerOverlaps?.length) {
+    for (const o of this._whiteTriggerOverlaps) o?.destroy?.();
+  }
+  this._whiteTriggerOverlaps = [];
+
+  // 2) 清掉舊 zones
+  if (this.whiteTriggers?.length) {
+    for (const t of this.whiteTriggers) t.zone?.destroy?.();
+  }
   this.whiteTriggers = [];
 
-  // 安全開關（避免 zone.body 不存在就炸）
-  const setZoneEnabled = (zone, enabled) => {
-    if (!zone || !zone.body) return;
-    zone.body.enable = enabled;
-    zone.body.updateFromGameObject?.();
-  };
-
-  // 只負責開關（不做建置）
-  this.enableWhiteGardenTriggers = (enabled) => {
-    for (const t of this.whiteTriggers) setZoneEnabled(t.zone, enabled);
-  };
-
-  // 建置 zones（只做一次）
+  // 3) 重建 zones + overlaps
   for (const cfg of WHITE_GARDEN_TRIGGERS) {
-    const zone = this.add.rectangle(cfg.x, cfg.y, cfg.w, cfg.h, 0x00ffcc, 0.0);
+    const zone = this.add.rectangle(cfg.x, cfg.y, cfg.w, cfg.h, 0x00ffcc, 0.5);
     this.physics.add.existing(zone, true);
     zone.body.updateFromGameObject();
 
-    const obj = { cfg, zone };
-    this.whiteTriggers.push(obj);
+    this.whiteTriggers.push({ cfg, zone });
 
-    this.physics.add.overlap(this.player, zone, () => {
-      if (!zone?.body?.enable) return;
+    const overlap = this.physics.add.overlap(this.player, zone, () => {
+      if (!zone.active || !zone?.body?.enable) return;
       if (dialogOpen || gameFinished) return;
       if (cfg.once && cfg.fired) return;
-
-      cfg.fired = true;
+      if (cfg.once) cfg.fired = true;
 
       const idx = STORY_FLOW.indexOf(cfg.id);
       if (idx >= 0) storyStep = idx;
 
       openCurrentDialog();
     });
+
+    this._whiteTriggerOverlaps.push(overlap);
+  }
+};
+
+// 初始依照地圖決定是否啟用（只在白園才需要先建）
+if (initStage === "white_garden") {
+  this.buildWhiteGardenTriggers();
+  this.enableWhiteGardenTriggers(true);
+} else {
+  this.enableWhiteGardenTriggers(false);
+}
+
+this.applyStageTriggers = (stage) => {
+  // 主 triggerZone
+  const mainOn = (stage === "prologue_fire");
+  if (this.triggerZone?.body) {
+    this.triggerZone.body.enable = mainOn;
+    this.triggerZone.active = mainOn;
   }
 
-  // 初始依照地圖決定是否啟用白園 triggers
-  this.enableWhiteGardenTriggers(initStage === "white_garden");
+  // ✅ 白園 triggers：進白園就確保存在
+  if (stage === "white_garden") {
+    const broken = !this.whiteTriggers?.length || !this.whiteTriggers[0]?.zone?.body;
+    if (broken) this.buildWhiteGardenTriggers();     // ✅ 被清掉就重建
+    this.enableWhiteGardenTriggers(true);
+
+  console.log("[WG enable]", stage,
+    this.whiteTriggers?.length,
+    this.whiteTriggers?.[0]?.zone?.active,
+    this.whiteTriggers?.[0]?.zone?.body?.enable
+  );
+  } else {
+    this.enableWhiteGardenTriggers(false);
+  }
+
+  this.canTrigger = true;
+};
 
   // ============ 輸入鍵 ============
   this.cursors = this.input.keyboard.createCursorKeys();
@@ -1684,6 +2110,9 @@ for (const colName of collisionNames) {
       else { this.player.x = d.player.x; this.player.y = d.player.y; }
     }
 
+    this.player.facing = d.playerFacing ?? "right";
+    this.player.setFlipX(!!d.playerFlipX);
+
     // 還原劇情世界狀態（角色顯示/鎖定等你原本的邏輯）
     applyStoryWorldState(this);
 
@@ -1696,6 +2125,8 @@ for (const colName of collisionNames) {
       dialogEl.classList.add("show");
       renderDialog(); // 不要用 openCurrentDialog（會推進進度）
     }
+
+  this.applyStageTriggers?.(window.__STAGE__);
   }
 
   gs.restoring = false;
@@ -1756,6 +2187,7 @@ const config = {
       debug: false
     }
   },
+  dom: { createContainer: true }, // ✅ 必須
   scene: [MainScene],
   scale: {
     mode: Phaser.Scale.FIT,
@@ -1769,5 +2201,3 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
-
-
