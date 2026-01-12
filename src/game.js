@@ -580,7 +580,7 @@ const DIALOGS = {
     { name: "  ", text: "褚冥漾此時已經完全沒有驚恐、困惑以及吐槽的慾望，他只有一種｢嗯，果然如此」的感想。", face: "uh" },
     { name: "雅多", text: "雷多，你清醒一點！",action: [
   { type: "show", actor: "twins2" },
-  { type: "toPlayer", actor: "twins2", enterFrom: "right", enterDist: 260, side: "up", gapY: 1},
+  { type: "toPlayer", actor: "twins2", enterFrom: "right", enterDist: 260, side: "up", gapY: 1, ms: 450 },
 ]},
 
   ]
@@ -2201,3 +2201,4 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
