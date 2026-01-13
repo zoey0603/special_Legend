@@ -41,7 +41,143 @@ let ingameIndex = 0;
 let ingameMode = "menu"; // "menu" | "saveConfirm" | "status"
 let menuToastTimer = null;
 let saveConfirmIndex = 0; // 0: Yes, 1: No
+// ===== Choice Popup (two-stage) =====
+const choicePopup = document.getElementById("choicePopup");
+const choiceTitleEl = document.getElementById("choiceTitle");
+const choiceDescEl  = document.getElementById("choiceDesc");
+const choiceBtnsEl  = document.getElementById("choiceBtns");
+const choiceNextBtn = document.getElementById("choiceNext");
 
+let _choiceIndex = 0;
+let _choiceResolve = null;
+let _choiceMode = "real"; // "tease" | "real"
+let _choiceOptions = [];
+
+
+// =========================
+// Choice Popup (two-stage)
+// =========================
+function isChoiceOpen() {
+  return !!choicePopup && choicePopup.classList.contains("show");
+}
+
+function closeChoicePopup() {
+  if (!choicePopup) return;
+  choicePopup.classList.remove("show");
+  choicePopup.setAttribute("aria-hidden", "true");
+  _choiceResolve = null;
+  _choiceOptions = [];
+  _choiceIndex = 0;
+  _choiceMode = "real";
+}
+
+function setChoiceActive(i) {
+  const btns = Array.from(choiceBtnsEl?.querySelectorAll("button") || []);
+  if (!btns.length) return;
+
+  btns.forEach(b => b.classList.remove("active"));
+  _choiceIndex = (i + btns.length) % btns.length;
+  btns[_choiceIndex].classList.add("active");
+  btns[_choiceIndex].focus({ preventScroll: true });
+}
+
+function renderChoiceButtons({ disabled = false } = {}) {
+  if (!choiceBtnsEl) return;
+  choiceBtnsEl.innerHTML = "";
+  const opts = _choiceOptions || [];
+  for (let i = 0; i < opts.length; i++) {
+    const opt = opts[i];
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = opt?.text ?? String(opt);
+    btn.disabled = !!disabled;
+    btn.addEventListener("click", () => {
+      if (disabled) return;
+      if (typeof _choiceResolve === "function") {
+        const r = _choiceResolve;
+        closeChoicePopup();
+        r(i);
+      }
+    });
+    choiceBtnsEl.appendChild(btn);
+  }
+  if (!disabled) setChoiceActive(0);
+}
+
+function openChoiceTease({ title = "請選擇", desc = "", options = [] } = {}) {
+  if (!choicePopup) return Promise.resolve(null);
+
+  closeChoicePopup();
+  _choiceMode = "tease";
+  _choiceOptions = options;
+
+  choiceTitleEl.textContent = title;
+  choiceDescEl.textContent = desc || "";
+  renderChoiceButtons({ disabled: true });
+
+  // tease：只給「繼續」按鈕
+  const nextBtn = document.getElementById("choiceNext");
+  if (nextBtn) {
+    nextBtn.style.display = "";
+    nextBtn.textContent = "繼續";
+    // 用 onclick 覆蓋，避免重複綁定
+    nextBtn.onclick = () => {
+      if (typeof _choiceResolve === "function") {
+        const r = _choiceResolve;
+        closeChoicePopup();
+        r(null);
+      }
+    };
+  }
+
+  choicePopup.classList.add("show");
+  choicePopup.setAttribute("aria-hidden", "false");
+
+  return new Promise((resolve) => {
+    _choiceResolve = resolve;
+  });
+}
+
+function openChoicePick({ title = "請選擇", desc = "", options = [] } = {}) {
+  if (!choicePopup) return Promise.resolve(0);
+
+  closeChoicePopup();
+  _choiceMode = "real";
+  _choiceOptions = options;
+
+  choiceTitleEl.textContent = title;
+  choiceDescEl.textContent = desc || "";
+
+  // real：隱藏「繼續」
+  const nextBtn = document.getElementById("choiceNext");
+  if (nextBtn) nextBtn.style.display = "none";
+
+  renderChoiceButtons({ disabled: false });
+
+  choicePopup.classList.add("show");
+  choicePopup.setAttribute("aria-hidden", "false");
+
+  return new Promise((resolve) => {
+    _choiceResolve = resolve;
+  });
+}
+
+// （向後相容）舊版 action: {type:"branch_andiel"} 會呼叫這個
+function runBranchAndiel(scene){
+  return openChoiceTease({
+    title: "請選擇",
+    desc: "（選項先跳出來）",
+    options: [
+      { text: "你想得美！我腦袋壞掉才會答應你啦！！！" },
+      { text: "我才不跟一個立繪是咖啡杯的傢伙走哩！！！" },
+    ],
+  });
+}
+
+
+
+window.__SFX_VOL__ = parseFloat(sfxVolEl.value || "1");
+window.__MUSIC_VOL__ = parseFloat(musicVolEl.value || "1"); // 你之後要做音樂才用
 
 function ensureGameState() {
   window.__GAME_STATE__ = window.__GAME_STATE__ || {
@@ -136,7 +272,6 @@ function showMenuToast(msg, ms = 900) {
 
 function denyButton(btn) {
   if (!btn) return;
-
   // 抖動 + 亮紅
   btn.classList.remove("nudge", "denied");
   // 觸發 reflow 讓動畫每次都能重播
@@ -166,14 +301,70 @@ function closeSettings() {
 // ===== Settings volume control =====
 // 你說音量/音效維持左右鍵控制：這裡先控制 musicVolEl
 // 若你想切換 music/sfx 再跟我說，我幫你加「選擇音量/音效」游標
-function adjustSlider(delta) {
-  const target = musicVolEl;
-  const cur = Number.parseFloat(target.value || "0");
+window.__SFX_VOL__ = window.__SFX_VOL__ ?? 1;
+sfxVolEl.addEventListener("input", () => {
+  window.__SFX_VOL__ = parseFloat(sfxVolEl.value || "1");
+});
+
+musicVolEl.addEventListener("input", () => {
+  window.__MUSIC_VOL__ = parseFloat(musicVolEl.value || "1");
+});
+
+function adjustSlider(el, delta) {
+  const cur = Number.parseFloat(el.value || "0");
   const v = Math.max(0, Math.min(1, cur + delta));
-  target.value = String(Number(v.toFixed(2)));
+  const vv = Number(v.toFixed(2));
+  el.value = String(vv);
+
+  // ✅ 真的套用
+  if (el === sfxVolEl) window.__SFX_VOL__ = vv;
+  if (el === musicVolEl) window.__MUSIC_VOL__ = vv;
 }
 
 // ===== Save =====
+function snapshotActors(scene) {
+  const out = {};
+  const A = scene?.actors;
+  if (!A) return out;
+  for (const [key, spr] of Object.entries(A)) {
+    if (!spr) continue;
+    out[key] = {
+      x: spr.x,
+      y: spr.y,
+      flipX: !!spr.flipX,
+      visible: spr.visible !== false,
+      alpha: (typeof spr.alpha === "number") ? spr.alpha : 1,
+      angle: (typeof spr.angle === "number") ? spr.angle : 0,
+      facing: spr.facing ?? null,
+      __isDown: !!spr.__isDown,
+      __locked: !!spr.__locked,
+      __forcedFlipX: spr.__forcedFlipX ?? null,
+    };
+  }
+  return out;
+}
+
+function restoreActors(scene, snap) {
+  const A = scene?.actors;
+  if (!A || !snap) return;
+  for (const [key, st] of Object.entries(snap)) {
+    const spr = A[key];
+    if (!spr || !st) continue;
+    if (typeof st.x === "number") spr.x = st.x;
+    if (typeof st.y === "number") spr.y = st.y;
+    if (typeof spr.setFlipX === "function") spr.setFlipX(!!st.flipX);
+    else spr.flipX = !!st.flipX;
+    if (typeof spr.setVisible === "function") spr.setVisible(!!st.visible);
+    else spr.visible = !!st.visible;
+    if (typeof st.alpha === "number") spr.alpha = st.alpha;
+    if (typeof st.angle === "number") spr.angle = st.angle;
+    if (st.facing != null) spr.facing = st.facing;
+    spr.__isDown = !!st.__isDown;
+    spr.__locked = !!st.__locked;
+    spr.__forcedFlipX = st.__forcedFlipX ?? null;
+  }
+}
+
 function saveGame() {
   const scene = window.__SCENE__;
   const payload = {
@@ -181,16 +372,43 @@ function saveGame() {
     storyStep,
     storyIndex,
     currentDialogId,
-    dialogOpen,
+    dialogOpen: !!dialogOpen,
     gameFinished: !!gameFinished,
-    player: scene?.player ? { x: scene.player.x, y: scene.player.y } : null,
     stage: window.__STAGE__ || "prologue_fire",
-    playerFacing: scene?.player?.facing ?? "right",
-    playerFlipX: !!scene?.player?.flipX,
     whiteGardenFired: Object.fromEntries(
       WHITE_GARDEN_TRIGGERS.map(t => [t.id, !!t.fired])
     ),
+    actors: {},
   };
+
+  // ✅ 保存所有角色的完整狀態
+  if (scene?.actors) {
+    for (const [key, actor] of Object.entries(scene.actors)) {
+      payload.actors[key] = {
+        x: actor.x,
+        y: actor.y,
+        flipX: actor.flipX,
+        facing: actor.facing,
+        visible: actor.visible,
+        isDown: !!actor.__isDown,
+        locked: !!actor.__locked,
+        forcedFlipX: actor.__forcedFlipX ?? null,
+        angle: actor.angle ?? 0,
+        alpha: actor.alpha ?? 1,
+      };
+    }
+  }
+
+  // ✅ 玩家獨立存一次（保險）
+  if (scene?.player) {
+    payload.player = {
+      x: scene.player.x,
+      y: scene.player.y,
+      facing: scene.player.facing ?? "right",
+      flipX: !!scene.player.flipX,
+    };
+  }
+
   localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
   refreshContinueButton();
 }
@@ -224,7 +442,32 @@ function confirmMenuSelection() {
 // ===== Keyboard =====
 function onKeyDown(e) {
   const gs = ensureGameState();
-  // ✅ 遊戲中按 S 存檔（不管 menu 有沒有開）
+  
+  // ===== Choice Popup =====
+  if (isChoiceOpen()) {
+    // 阻止捲動/預設行為
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," ","Enter","Escape","Backspace"].includes(e.key)) e.preventDefault();
+
+    // tease 模式：只允許 Enter/Space 觸發「繼續」
+    if (_choiceMode === "tease") {
+      if (e.key === "Enter" || e.key === " ") {
+        document.getElementById("choiceNext")?.click();
+      }
+      return;
+    }
+
+    // real 模式：上下選、Enter/Space 確認
+    if (e.key === "ArrowUp") { setChoiceActive(_choiceIndex - 1); return; }
+    if (e.key === "ArrowDown") { setChoiceActive(_choiceIndex + 1); return; }
+    if (e.key === "Enter" || e.key === " ") {
+      const btns = Array.from(choiceBtnsEl?.querySelectorAll("button") || []);
+      btns[_choiceIndex]?.click();
+      return;
+    }
+    return;
+  }
+
+// ✅ 遊戲中按 S 存檔（不管 menu 有沒有開）
   if (
     e.code === "KeyS" &&
     gs.phase === "playing" &&
@@ -259,11 +502,11 @@ function onKeyDown(e) {
   }
 
   // ===== SETTINGS =====
-  if (menuMode === "settings") {
-    if (e.key === "ArrowLeft") adjustSlider(-0.05);
-    if (e.key === "ArrowRight") adjustSlider(+0.05);
-    if (e.key === "Enter" || e.key === " ") { closeSettings(); return; }
-  }
+if (menuMode === "settings") {
+  if (e.key === "ArrowLeft") { adjustSlider(-0.05); return; }
+  if (e.key === "ArrowRight") { adjustSlider(+0.05); return; }
+  if (e.key === "Enter" || e.key === " ") { closeSettings(); return; }
+}
 }
 
 window.addEventListener("keydown", onKeyDown, { capture: true });
@@ -298,6 +541,9 @@ function startNewGame() {
 }
 
 function continueGame() {
+  // ✅ 避免讀檔切場時 DOM 還殘留舊視窗
+  closeDialog();
+  closeChoicePopup();
   const gs = ensureGameState();
   gs.restoring = true;
   const data = loadGame();
@@ -311,17 +557,19 @@ function continueGame() {
   hideIngameMenu?.();
   if (typeof hideEndOverlay === "function") hideEndOverlay();
 
-  // ✅ 先把劇情變數還原
+  // ✅ 不再恢復 dialogOpen，確保回遊戲時對話框關閉
   gameFinished = !!data.gameFinished;
   storyStep = data.storyStep ?? 0;
   storyIndex = data.storyIndex ?? 0;
   currentDialogId = data.currentDialogId ?? STORY_FLOW[0];
-  dialogOpen = !!data.dialogOpen;   // ✅ 還原
-
-  const firedMap = data.whiteGardenFired || {};
+  dialogOpen = !!data.dialogOpen;
+  // DOM 先關掉，等場景 create() 載入完成再決定要不要打開
+  dialogEl.classList.remove("show");
+const firedMap = data.whiteGardenFired || {};
   for (const cfg of WHITE_GARDEN_TRIGGERS) {
     cfg.fired = !!firedMap[cfg.id];
   }
+
   const scene = window.__SCENE__;
   if (scene?.input?.keyboard) scene.input.keyboard.resetKeys();
 
@@ -334,6 +582,8 @@ function continueGame() {
 btnStart?.addEventListener("click", startNewGame);
 btnContinue?.addEventListener("click", () => { if (!btnContinue.disabled) continueGame(); });
 btnSettings?.addEventListener("click", openSettings);
+
+
 
 // 角色頭像對應（你先只有褚冥漾也OK）
 const PORTRAITS = {
@@ -351,6 +601,9 @@ const PORTRAITS = {
   "冰炎": {
     normal: "assets/img/bing_portrait.png",
     angry:  "assets/img/bing_portrait_angry.png",
+  },
+  "安地爾": {
+    normal: "assets/img/coffee_portrait.png",
   },
 };
 
@@ -372,6 +625,19 @@ const COMMON_TILESETS = [
   { name: "路燈上_修改", imageKey: "ts_路燈上_修改", imageFile: "assets/maps/tilesets/路燈上_修改.png" },
   { name: "路燈下_修改", imageKey: "ts_路燈下_修改", imageFile: "assets/maps/tilesets/路燈下_修改.png" },
   { name: "背景3",      imageKey: "ts_背景3",      imageFile: "assets/maps/tilesets/背景3.png" },
+  { name: "二樓 樓梯",   imageKey: "ts_二樓樓梯", imageFile: "assets/maps/tilesets/二樓 樓梯.png" },
+  { name: "樓梯欄杆",   imageKey: "ts_樓梯欄杆", imageFile: "assets/maps/tilesets/樓梯欄杆.png" },
+  { name: "地毯 一樓",   imageKey: "ts_地毯一樓", imageFile: "assets/maps/tilesets/地毯 一樓.png" },
+  { name: "吐司 吧檯",   imageKey: "ts_吐司吧檯", imageFile: "assets/maps/tilesets/吐司 吧檯.png" },
+  { name: "咖啡機 流理台",imageKey: "ts_流理台",   imageFile: "assets/maps/tilesets/咖啡機 流理台.png" },
+  { name: "小花 桌巾 桌椅",imageKey: "ts_小花桌巾桌椅", imageFile: "assets/maps/tilesets/小花 桌巾 桌椅.png" },
+  { name: "外框",        imageKey: "ts_外框", imageFile: "assets/maps/tilesets/外框.png" },
+  { name: "果汁機 盤子 麵包籃",   imageKey: "ts_果汁機盤子麵包籃", imageFile: "assets/maps/tilesets/果汁機 盤子 麵包籃.png" },
+  { name: "花盆",        imageKey: "ts_花盆", imageFile: "assets/maps/tilesets/花盆.png" },
+  { name: "架子 櫥櫃",   imageKey: "ts_架子 櫥櫃", imageFile: "assets/maps/tilesets/架子 櫥櫃.png" },
+  { name: "看板 小盆栽",  imageKey: "ts_看板 小盆栽",   imageFile: "assets/maps/tilesets/看板 小盆栽.png" },
+  { name: "咖啡杯",       imageKey: "ts_咖啡杯", imageFile: "assets/maps/tilesets/咖啡杯.png" },
+  { name: "相框",        imageKey: "ts_相框", imageFile: "assets/maps/tilesets/相框.png" },
 ];
 
 const TILEMAPS = {
@@ -390,6 +656,11 @@ const TILEMAPS = {
   blackhall: {
     mapKey: "map_blackhall",
     mapFile: "assets/maps/blackhall.tmj",
+    tilesets: COMMON_TILESETS,
+  },
+  coffee: {
+    mapKey: "map_coffee",
+    mapFile: "assets/maps/coffee.tmj",
     tilesets: COMMON_TILESETS,
   },
 };
@@ -499,7 +770,7 @@ const DIALOGS = {
     { name: "褚冥漾", text: "......蛤？", face: "shock" },
     { name: "褚冥漾", text: "『他說的那個夏碎哥是我知道的那個夏碎嗎？』", face: "really" },
     { name: "褚冥漾", text: "『應該......？是......吧？』", face: "really" },
-    { name: "褚冥漾", text: "『我打夏碎？真的假的？』", face: "really" },
+    { name: "褚冥漾", text: "『我打夏碎？真的假的？』", face: "uh" },
     { name: "褚冥漾", text: "修但幾類，你先冷靜一點千冬歲......", face: "really" },
     { name: "  ", text: "一句｢你是不是認錯人了？｣還沒說出口，遠處又傳來一道聲音打斷褚冥漾的辯解。" },
     { name: "？？？", text: "你為什麼要率領鬼族攻擊公會的醫療班？" },
@@ -527,7 +798,7 @@ const DIALOGS = {
     { name: "萊恩？", text: "你不再是我萊恩·史凱爾的朋友了。" },
     { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "really", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 455, y: 145, ms: 500 } },
-    { name: "  ", text: "萊恩一臉失落(雖然其實根本看不到表情)的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 440, y: 167, ms: 600 } },
+    { name: "  ", text: "萊恩一臉失落（雖然其實根本看不到表情）的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 440, y: 167, ms: 600 } },
     { name: "千冬歲", text: "你這個邪惡的妖師！現在竟然還對萊恩進行精神攻擊！！！", action: { type: "jump", actor: "qian" } },
     { name: "褚冥漾", text: "千冬歲你睜開眼睛看看啊！我不信你兩眼空空看不清楚是誰在傷害萊恩！！！", face: "wtf" },
     { name: "千冬歲", text: "閉嘴！你這個背叛者沒資格喊我的名字，聽了就噁心!", action: { type: "jump", actor: "qian" } },
@@ -553,7 +824,7 @@ const DIALOGS = {
     { name: "西瑞", text: "漾～要統治世界怎麼不找本大爺～", action: [ 
       { type: "show", actor: "five" },
       { type: "runTo", actor: "five", x: 420, y: 200, ms: 300 },
-      { type: "sfx", key: "hit", volume: 0.3 },
+      { type: "sfx", key: "hit", volume: 0.8 },
       { type: "runTo", actor: "angel", x: 430, y: 225, ms: 400 },
       { type: "emote", actor: "angel", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
     ]},
@@ -597,7 +868,7 @@ const DIALOGS = {
   ]},
     { name: "雷多", text: "伊多！", action: { type: "toPlayer", actor: "bigbro", side: "down", gapY: 1, ms: 450 } },
     { name: "  ", text: "伴隨著雷多驚喜的聲音，水妖精如風一般衝到伊多面前，擋在他身前面向眾人。", action: [
-  { type: "toActor", actor: "twins1", target: "bigbro", side: "left", gap: 1, speed: 200 },
+  { type: "toActor", actor: "twins1", target: "bigbro", side: "left", gap: 1, speed: 500 },
   { type: "face", actor: "twins1", dir: "left" }
   ]},
     { name: "雷多", text: "對不起，漾漾，我剛剛竟然懷疑你。" },
@@ -612,7 +883,7 @@ const DIALOGS = {
   { type: "show", actor: "ran" },
   { type: "show", actor: "moon" }
   ]},
-    { name: "  ", text: "來人聲音不大，卻一下吸引了所有人的注意——是白陵然。", action: [
+    { name: "  ", text: "來人聲音不大，卻一下吸引了所有人的注意——是白陵然，身後跟著褚冥玥。", action: [
       { type: "runTo", actor: "ran", x: 435, y: 200, ms: 800 },
       { type: "runTo", actor: "moon", x: 400, y: 205, ms: 600 } 
     ]},
@@ -624,19 +895,105 @@ const DIALOGS = {
     { name: "褚冥漾", text: "......", face: "wtf" },
     { name: "褚冥漾", text: "『我．就．知．道。』", face: "cry" },
     { name: "褚冥漾", text: "『不，不對，我不知道，我根本不知道我怎麼做的。』", face: "cry" },
-    { name: "  ", text: "在褚冥漾還沒反應過來前，這次換褚冥玥咬著牙開口了。" },
+    { name: "  ", text: "在褚冥漾還沒反應過來前，換褚冥玥咬著牙開口了。" },
     { name: "褚冥玥", text: "漾漾，辛西亞從來沒有虧待過你，她還做綠豆湯給你喝，為什麼要傷害她？" },
     { name: "褚冥漾", text: "......", face: "shock" },
     { name: "褚冥漾", text: "......", face: "deny" },
     { name: "褚冥漾", text: "你是誰？！！你！絕！對！不！是！我！姊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "快把頭腦正常的我姊還給我！", face: "cry" },
+    { name: "褚冥漾", text: "不對！快把頭腦正常的所有人還給我！！！", face: "cry", action: { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 } },
+    { name: "？？？", text: "看來白色種族間的友誼不過如此。", action: { type: "show", actor: "coffee" } },
+    { name: "  ", text: "耳邊的聲音相當熟悉，熟悉到讓褚冥漾的寒毛瞬間豎起，甚至不用回頭就知道對方的身分。", action: [
+      { type: "face", actor: "coffee", dir: "left" },
+      { type: "toPlayer", actor: "coffee", enterFrom: "right", enterDist: 260, side: "right", gapY: 3, ms: 150 }
+   ] },
+    { name: "  ", text: "褚冥漾幾乎是立刻回頭同時往後跳開，在腦袋反應過來前手裡就已經握住米納斯對準來人，其餘在場眾人也紛紛改變方才宛如過家家般的態度，如臨大敵的面對不請自來的｢客人」。", action: [
+      { type: "face", actor: "chu", dir: "right" },
+      { type: "move", actor: "chu", dx: -15, dy: 0, ms: 200 },
+      { type: "face", actor: "five", dir: "right" },
+      { type: "face", actor: "bigbro", dir: "right" },
+      { type: "face", actor: "twins2", dir: "left" },
+      { type: "face", actor: "twins1", dir: "right" }
+      ]},
+    { name: "褚冥漾", text: "安地爾！", face: "uh" },
+    { name: "褚冥漾", text: "『為什麼這個變臉人......呃？』", face: "really" },
+    { name: "安地爾", text: " "},
+    { name: "褚冥漾", text: "......" },
+    { name: "安地爾", text: "（笑？）"},
+    { name: "褚冥漾", text: "......", face: "deny" },
+    { name: "安地爾", text: "（可能大概也許是在笑）"},
+    { name: "褚冥漾", text: "......", face: "deny" },
+    { name: "褚冥漾", text: "......", face: "wtf" },
+    { name: "  ", text: "被眾多武器包圍的安地爾卻絲毫不顯慌張，臉上仍然掛著游刃有餘的微笑，彷彿這只不過是，簡單掃過再場眾人各異的臉色後，輕笑一聲開口：" },
+    { name: "安地爾", text: "不用那麼緊張，我目前正在休假中。" },
+    { name: "褚冥漾", text: "『咖啡杯可以休假嗎？』", face: "really" },
+    { name: "千冬歲", text: "你......" },
+    { name: "褚冥漾", text: "『千冬歲？你終於要清醒了嗎？』", face: "really" },
+    { name: "褚冥漾", text: "『快看清楚啊！對面這個別說是鬼族了，根本就是個咖啡杯啊！！還有很多奇怪的地方啊！！！』", face: "nolove" },
+    { name: "千冬歲", text: "褚冥漾你竟然還跟鬼族勾結！！！", action: [
+       { type: "emote", actor: "qian", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
+      { type: "jump", actor: "qian" }
+   ]},
+    { name: "褚冥漾", text: "（發自內心）幹！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "千冬歲你視力還好嗎？！", face: "wtf" },
+    { name: "千冬歲", text: "我的視力不需要背叛者關心！"},
+    { name: "褚冥漾", text: "我不是那個意思！！", face: "wtf" },
+    { name: "  ", text: "也許是笑話終於看夠了，此時安地爾才慢悠悠開口：" },
+    { name: "安地爾", text: "那麼凡斯的後代，既然你都被白色種族排斥了，要不要乾脆加入我這裡呢？", action: { type: "branch_andiel" } },
+
   ]
 };
+
+
+// =========================
+// Dialog patch: Andiel branch (two-stage choice)
+// =========================
+(function patchAndielBranchDialogs(){
+  try{
+    const lines = DIALOGS?.white_garden;
+    if (!Array.isArray(lines)) return;
+
+    // 確保 coffee_branch 存在（避免選項一切圖後找不到對話）
+    if (!DIALOGS.coffee_branch) {
+      DIALOGS.coffee_branch = [
+        { name: "  ", text: "（你被帶離白園，來到一個詭異又荒謬的地方——咖啡杯的立繪居然在跟你對話。）" },
+        { name: "褚冥漾", face: "wtf", text: "……我到底為什麼會走到這一步。" },
+        { name: "安地爾", text: "歡迎，凡斯的後代。接下來就有趣了。" },
+      ];
+    }
+
+    const i = lines.findIndex(l => l?.action?.type === "branch_andiel");
+    if (i < 0) return;
+
+    // 把原本那句改成：先跳 tease popup
+    lines[i].action = { type: "andiel_tease" };
+
+    // 插入吐槽 + 真正選擇
+    const injected = [
+      { name: "褚冥漾", face: "wtf", text: "為什麼會有選項啊？！我是在玩遊戲嗎？", action: { type: "andiel_tease" } },
+      { name: "  ", text: "（現在，真的要做出選擇了。）", action: { type: "andiel_choice" } },
+
+      // ✅ 選項二會留在白園繼續：先給你幾句接續（你可再自己加）
+      { name: "安地爾", text: "呵……你的嘴還真硬。" },
+      { name: "褚冥漾", face: "deny", text: "比起跟咖啡杯走，我寧願被你氣死。" },
+      { name: "  ", text: "安地爾沒有再逼迫，只是笑得意味深長。" },
+    ];
+
+    // 避免重複插入：若後面已經有 andiel_choice 就不再插
+    const already = lines.slice(i+1, i+6).some(l => l?.action?.type === "andiel_choice");
+    if (!already) lines.splice(i+1, 0, ...injected);
+  } catch(e) {
+    console.warn("[patchAndielBranchDialogs] failed", e);
+  }
+})();
+
 
 // 1) 章節順序（一定要放在 currentDialogId 前）
 const STORY_FLOW = [
   "prologue_fire",
   "wake_blackhall",
-  "white_garden"
+  "white_garden",
+  "coffee_branch"
 ];
 
 let gameFinished = false;
@@ -784,7 +1141,7 @@ function shouldCoffeeBeVisible(lines, idx) {
 
     const action = lines[i]?.action;
     const arr = Array.isArray(action) ? action : [action];
-    if (arr.some(a => a && a.type === "show" && a.actor === "Coffee")) return true;
+    if (arr.some(a => a && a.type === "show" && a.actor === "coffee")) return true;
   }
   return false;
 }
@@ -964,10 +1321,10 @@ async function renderDialog() {
   const speaker = normalizeName(line.name);
   const src = speaker ? getPortrait(speaker, line.face) : "";
   if (src) {
-    dialogPortrait.src = src;
-    dialogPortrait.classList.remove("hidden");
+    dialogPortraitEl.src = src;
+    dialogPortraitEl.classList.remove("hidden");
   } else {
-    dialogPortrait.classList.add("hidden");
+    dialogPortraitEl.classList.add("hidden");
   }
 
   // ✅ 跑動作（支援 action 陣列）
@@ -1003,6 +1360,8 @@ function openCurrentDialog() {
 function closeDialog() {
   dialogOpen = false;
   dialogEl.classList.remove("show");
+  // ✅ 以防萬一：對話關閉時也把選項收起來
+  closeChoicePopup();
 }
 
 function lineHasDashBehindBing(line) {
@@ -1264,6 +1623,55 @@ function runAction(action) {
   if (!scene || !A) return Promise.resolve();
 
   const getActor = (key) => A[key];
+
+  // ===== Branch: 安地爾邀請 =====
+  if (action.type === "andiel_tease") {
+    return openChoiceTease({
+      title: "請選擇",
+      desc: "請先Enter/Space繼續",
+      options: [
+        { text: "你想得美！我腦袋壞掉才會答應你啦！！！" },
+        { text: "我才不跟一個立繪是咖啡杯的傢伙走哩！！！" },
+      ],
+    });
+  }
+  if (action.type === "andiel_choice") {
+    return (async () => {
+      const pick = await openChoicePick({
+        title: "請選擇",
+        desc: "要怎麼回應安地爾？",
+        options: [
+          { text: "你想得美！我腦袋壞掉才會答應你啦！！！" },
+          { text: "我才不跟一個立繪是咖啡杯的傢伙走哩！！！" },
+        ],
+      });
+
+      if (pick === 0) {
+        // ✅ 選項一：切到咖啡地圖，開啟新劇情（你可再補更多對話）
+        await runAction([
+          { type: "fadeBlack", to: 1, ms: 220 },
+          { type: "gotoStage", stage: "coffee", spawn: "default" },
+          { type: "fadeBlack", to: 0, ms: 220 },
+        ]);
+
+        // 這裡用「換章節」的方式：若你之後把 coffee_branch 加進 STORY_FLOW，就會自動走線性流程。
+        // 如果沒有加進 STORY_FLOW，也可以照樣播放 coffee_branch，結束後會回到原本流程最後一章的結局。
+        
+// ✅ 走到分支章節（讓後續 nextDialog 不會跑回原本 STORY_FLOW 結尾）
+const idx = STORY_FLOW.indexOf("coffee_branch");
+if (idx >= 0) storyStep = idx;
+openCurrentDialog(); // 會自動 storyIndex=0 並 render
+return;
+      }
+
+      // ✅ 選項二：留在原地，人物座標不變，劇情照白園往下
+      return;
+    })();
+  }
+
+if (action.type === "branch_andiel") {
+  return runBranchAndiel(scene);
+}
 
   if (action.type === "runTo") {
   const actor = getActor(action.actor);
@@ -1616,7 +2024,8 @@ if (action.type === "sfx") {
   // allowMultiple=false 會避免同音效疊太多（可選）
   if (action.allowMultiple === false) scene.sound.stopByKey(key);
 
-  scene.sound.play(key, { volume, rate, detune });
+  const master = window.__SFX_VOL__ ?? 1;
+  scene.sound.play(key, { volume: volume * master, rate, detune });
 
   return Promise.resolve(); // 播放不用等，直接往下跑劇情
 }
@@ -1916,17 +2325,26 @@ this._mapLayers = [];
 this._layersByName = {};   // ✅ 每次換地圖都重建
 
 function depthForLayer(name) {
-  // 依你截圖的層級（上到下：人、火、路燈下、草叢下、人1、草叢上、路燈上、地面、背景3）
   if (name.includes("背景")) return 0;
   if (name === "地面") return 10;
+  if (name === "一樓") return 10;
+  if (name === "二樓樓梯") return 11;
 
   // 中景（在角色下面）
   if (name === "路燈上") return 18;
   if (name === "草叢上") return 19;
   if (name === "房間") return 19;
+  if (name === "欄杆") return 19;
+  if (name === "桌子") return 19;
+  if (name === "上層架") return 19;
+  if (name === "上層架的麵包") return 20;
+  if (name === "流理臺") return 21;
+  if (name === "矮櫃上的物品") return 22;
 
   // 前景（要蓋住角色）
   if (name === "草叢下") return 40;
+  if (name === "吧檯") return 40;
+  if (name === "方框") return 40;
   if (name === "路燈下") return 41;
   if (name === "火") return 42;
 
@@ -2221,33 +2639,61 @@ this.applyStageTriggers = (stage) => {
 
   // ============ Continue：套用讀檔（只做一次） ============
   if (gs.pendingLoad) {
-    const d = gs.pendingLoad;
-    gs.pendingLoad = null;
+  const d = gs.pendingLoad;
+  gs.pendingLoad = null;
 
-    // 玩家位置
-    if (this.player && d.player) {
-      if (this.player.body) this.player.body.reset(d.player.x, d.player.y);
-      else { this.player.x = d.player.x; this.player.y = d.player.y; }
-    }
-
-    this.player.facing = d.playerFacing ?? "right";
-    this.player.setFlipX(!!d.playerFlipX);
-
-    // 還原劇情世界狀態（角色顯示/鎖定等你原本的邏輯）
-    applyStoryWorldState(this);
-
-    // 避免一讀檔就立刻觸發
-    this.canTrigger = false;
-
-    // 還原對話視窗
-    if (d.dialogOpen) {
-      dialogOpen = true;
-      dialogEl.classList.add("show");
-      renderDialog(); // 不要用 openCurrentDialog（會推進進度）
-    }
-
-  this.applyStageTriggers?.(window.__STAGE__);
+  // ✅ 玩家位置
+  if (this.player && d.player) {
+    if (this.player.body) this.player.body.reset(d.player.x, d.player.y);
+    else { this.player.x = d.player.x; this.player.y = d.player.y; }
   }
+  this.player.facing = d.player?.facing ?? "right";
+  this.player.setFlipX(!!d.player?.flipX);
+
+  // ✅ 還原其他角色狀態
+  if (d.actors && this.actors) {
+    for (const [key, state] of Object.entries(d.actors)) {
+      const a = this.actors[key];
+      if (!a) continue;
+      if (state.x != null) a.x = state.x;
+      if (state.y != null) a.y = state.y;
+      if (state.flipX != null) a.setFlipX(state.flipX);
+      if (state.facing) a.facing = state.facing;
+      if (state.visible != null) a.setVisible(state.visible);
+      if (state.locked != null) a.__locked = !!state.locked;
+      if ("forcedFlipX" in state) a.__forcedFlipX = state.forcedFlipX;
+      if (state.angle != null) a.angle = state.angle;
+      if (state.alpha != null) a.alpha = state.alpha;
+      if (state.isDown) {
+        a.__isDown = true;
+        a.angle = -90; // 或你想呈現的倒地角度
+        a.alpha = 0.85;
+      } else {
+        a.__isDown = false;
+        a.angle = 0;
+        a.alpha = 1;
+      }
+    }
+  }
+  applyStoryWorldState(this);
+  this.applyStageTriggers?.(window.__STAGE__);
+  // ✅ 讀檔時避免「一進場就立刻觸發」：先暫時關閉，再延遲開回來
+  this.canTrigger = false;
+  this.time?.delayedCall?.(200, () => { this.canTrigger = true; });
+
+  // ✅ 讀檔後「接續進度」：
+// - 若存檔時對話正在開啟：一定要接回去
+// - 若存檔時對話關閉，但 storyIndex > 0：通常代表你已經在某章中途，避免重踩觸發器把 storyIndex 重置成 0
+  const shouldResumeDialog = !!d.dialogOpen || ((d.storyIndex ?? 0) > 0);
+  if (shouldResumeDialog && !d.gameFinished) {
+    currentDialogId = d.currentDialogId ?? currentDialogId;
+    storyIndex = d.storyIndex ?? storyIndex;
+
+    dialogOpen = true;
+    dialogEl.classList.add("show");
+    renderDialog();
+  }
+}
 
   gs.restoring = false;
 }
