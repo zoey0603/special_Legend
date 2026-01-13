@@ -409,3 +409,40 @@ html, body { margin:0; padding:0; background:#111; height:100%; }
   opacity: .75;
   pointer-events: none;
 }
+
+/* Warning Overlay */
+.warning-overlay{
+  position: fixed;
+  inset: 0;
+  /* 要蓋過主選單(#menu:100000)、對話框等所有 UI */
+  z-index: 120000;
+  background: rgba(0,0,0,1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.warning-overlay.is-hidden{
+  display: none;
+}
+
+.warning-panel{
+  width: min(900px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.warning-text{
+  white-space: pre-wrap;     /* 保留換行 */
+  text-align: center;
+  font-size: 20px;
+  line-height: 1.7;
+  color: #fff;
+  font-family: "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+}
+
+/* 全文來源不顯示（只給 JS 讀取） */
+.warning-full{
+  display: none;
+}
