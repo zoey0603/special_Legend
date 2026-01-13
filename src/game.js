@@ -53,7 +53,121 @@ let _choiceResolve = null;
 let _choiceMode = "real"; // "tease" | "real"
 let _choiceOptions = [];
 
+// ===== Warning Typewriter (DOM-based) =====
+// ✅ 只在「同一個分頁/同一輪遊戲」顯示一次：返回主選單/重新開始都不會再跳。
+// 若你希望「關掉瀏覽器也不要再跳」，把 sessionStorage 改成 localStorage 即可。
+const WARNING_KEY = "MZ_WARNING_SHOWN_V1";
 
+function _warningStore(){
+  try{ return window.sessionStorage; } catch(_e){ return null; }
+}
+
+function isWarningOpen(){
+  const el = document.getElementById("warningOverlay");
+  return el && !el.classList.contains("is-hidden");
+}
+
+function showWarningOverlay(){
+  const overlay = document.getElementById("warningOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("is-hidden");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function hideWarningOverlay(){
+  const overlay = document.getElementById("warningOverlay");
+  if (!overlay) return;
+  overlay.classList.add("is-hidden");
+  overlay.setAttribute("aria-hidden", "true");
+}
+
+function bootShowWarningOnce(scene){
+  // 只顯示一次（同一個分頁）
+  const store = _warningStore();
+  if (store && store.getItem(WARNING_KEY) === "1") return false;
+
+  const full = document.getElementById("warningFull");
+  const out  = document.getElementById("warningText");
+  const overlay = document.getElementById("warningOverlay");
+  if (!full || !out || !overlay) return false;
+
+  const text = (full.textContent || "").replace(/\r\n/g, "\n").trimEnd();
+  out.textContent = "";
+
+  // 警語期間先暫停 Phaser（避免背景繼續跑）
+  try{ scene?.scene?.pause?.(); }catch(_e){}
+
+  showWarningOverlay();
+
+  let i = 0;
+  let typing = true;
+  let timer = null;
+  const delay = 18; // 打字速度：數字越小越快
+
+  function finishTyping(){
+    typing = false;
+    if (timer) { clearInterval(timer); timer = null; }
+    out.textContent = text;
+  }
+
+  function closeAndContinue(){
+    hideWarningOverlay();
+    if (store) store.setItem(WARNING_KEY, "1");
+
+    // 警語結束後要做什麼：回主選單 or 直接開始
+    // 你想回主選單：
+    if (typeof showMenu === "function") showMenu();
+    // 如果你想直接開始遊戲，把上面那行改成：
+    // if (typeof startNewGame === "function") startNewGame();
+  }
+
+  function onContinue(){
+    if (typing) {
+      finishTyping();
+    } else {
+      cleanup();
+      closeAndContinue();
+    }
+  }
+
+  function cleanup(){
+    document.removeEventListener("keydown", onKeyDownCapture, true);
+    overlay.removeEventListener("click", onContinue);
+  }
+
+  function onKeyDownCapture(e){
+    // 只在警語開著時攔截
+    if (!isWarningOpen()) return;
+
+    const k = e.code;
+    if (k === "Enter" || k === "Space") {
+      e.preventDefault();
+      e.stopPropagation();
+      onContinue();
+      return;
+    }
+
+    // 其他按鍵一律擋掉（避免你的遊戲快捷鍵搶走）
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // 用 capture=true 先攔截，最保險
+  document.addEventListener("keydown", onKeyDownCapture, true);
+  overlay.addEventListener("click", onContinue);
+
+  timer = setInterval(() => {
+    i++;
+    out.textContent = text.slice(0, i);
+    if (i >= text.length) {
+      typing = false;
+      clearInterval(timer);
+      timer = null;
+    }
+  }, delay);
+
+  return true;
+}
 // =========================
 // Choice Popup (two-stage)
 // =========================
@@ -161,20 +275,6 @@ function openChoicePick({ title = "請選擇", desc = "", options = [] } = {}) {
     _choiceResolve = resolve;
   });
 }
-
-// （向後相容）舊版 action: {type:"branch_andiel"} 會呼叫這個
-function runBranchAndiel(scene){
-  return openChoiceTease({
-    title: "請選擇",
-    desc: "（選項先跳出來）",
-    options: [
-      { text: "你想得美！我腦袋壞掉才會答應你啦！！！" },
-      { text: "我才不跟一個立繪是咖啡杯的傢伙走哩！！！" },
-    ],
-  });
-}
-
-
 
 window.__SFX_VOL__ = parseFloat(sfxVolEl.value || "1");
 window.__MUSIC_VOL__ = parseFloat(musicVolEl.value || "1"); // 你之後要做音樂才用
@@ -310,6 +410,16 @@ musicVolEl.addEventListener("input", () => {
   window.__MUSIC_VOL__ = parseFloat(musicVolEl.value || "1");
 });
 
+
+function getActiveSliderEl() {
+  // 優先：目前聚焦的 range
+  const ae = document.activeElement;
+  if (ae && ae.tagName === "INPUT" && ae.type === "range") return ae;
+
+  // 次要：如果 settingsPanel 裡面有被點擊過，通常 focus 會在 input 上；沒 focus 就預設調整音效
+  return sfxVolEl || musicVolEl || ae;
+}
+
 function adjustSlider(el, delta) {
   const cur = Number.parseFloat(el.value || "0");
   const v = Math.max(0, Math.min(1, cur + delta));
@@ -442,7 +552,9 @@ function confirmMenuSelection() {
 // ===== Keyboard =====
 function onKeyDown(e) {
   const gs = ensureGameState();
-  
+  if (isWarningOpen()) return;
+  // ✅ 開頭警語顯示中：擋掉所有快捷鍵（Enter/Space 由警語自己處理）
+
   // ===== Choice Popup =====
   if (isChoiceOpen()) {
     // 阻止捲動/預設行為
@@ -503,8 +615,8 @@ function onKeyDown(e) {
 
   // ===== SETTINGS =====
 if (menuMode === "settings") {
-  if (e.key === "ArrowLeft") { adjustSlider(-0.05); return; }
-  if (e.key === "ArrowRight") { adjustSlider(+0.05); return; }
+  if (e.key === "ArrowLeft") { adjustSlider(getActiveSliderEl(), -0.05); return; }
+  if (e.key === "ArrowRight") { adjustSlider(getActiveSliderEl(), +0.05); return; }
   if (e.key === "Enter" || e.key === " ") { closeSettings(); return; }
 }
 }
@@ -597,10 +709,18 @@ const PORTRAITS = {
     uh: "assets/img/chu_portrait_uh.png",
     cry: "assets/img/chu_portrait_cry.png",
     nolove: "assets/img/chu_portrait_nolove.png",
+    no: "assets/img/chu_portrait_no.png",
   },
   "冰炎": {
     normal: "assets/img/bing_portrait.png",
     angry:  "assets/img/bing_portrait_angry.png",
+    dark:  "assets/img/bing_portrait_dark.png",
+    close:  "assets/img/bing_portrait_close.png",
+    closea:  "assets/img/bing_portrait_closea.png",
+  },
+  "冰炎 ": {
+    normal: "assets/img/bing_portrait1.png",
+    angry:  "assets/img/bing_portrait_angry1.png",
   },
   "安地爾": {
     normal: "assets/img/coffee_portrait.png",
@@ -635,6 +755,7 @@ const COMMON_TILESETS = [
   { name: "果汁機 盤子 麵包籃",   imageKey: "ts_果汁機盤子麵包籃", imageFile: "assets/maps/tilesets/果汁機 盤子 麵包籃.png" },
   { name: "花盆",        imageKey: "ts_花盆", imageFile: "assets/maps/tilesets/花盆.png" },
   { name: "架子 櫥櫃",   imageKey: "ts_架子 櫥櫃", imageFile: "assets/maps/tilesets/架子 櫥櫃.png" },
+  { name: "矮櫃 書櫃",   imageKey: "ts_矮櫃 書櫃", imageFile: "assets/maps/tilesets/矮櫃 書櫃.png" },
   { name: "看板 小盆栽",  imageKey: "ts_看板 小盆栽",   imageFile: "assets/maps/tilesets/看板 小盆栽.png" },
   { name: "咖啡杯",       imageKey: "ts_咖啡杯", imageFile: "assets/maps/tilesets/咖啡杯.png" },
   { name: "相框",        imageKey: "ts_相框", imageFile: "assets/maps/tilesets/相框.png" },
@@ -661,6 +782,7 @@ const TILEMAPS = {
   coffee: {
     mapKey: "map_coffee",
     mapFile: "assets/maps/coffee.tmj",
+    collisionLayerNames: ["Collision"],
     tilesets: COMMON_TILESETS,
   },
 };
@@ -674,7 +796,10 @@ const STAGE_SPAWN = {
     entry: { x: 120, y: 195 },     // 例：入口
     pond:  { x: 380, y: 140 },     // 例：池邊
     default: { x: 240, y: 200 }
-  }
+  },
+  coffee: {
+    default: { x: 20, y: 178 }, // ✅ 對齊 tmj 的 player_spawn
+  },
 };
 
 const WHITE_GARDEN_TRIGGERS = [
@@ -707,12 +832,12 @@ const DIALOGS = {
     { name: "  ", text: "而當他看清來者時，詫異被不可置信給取代。" },
     { name: "  ", text: "沒入體內的兇器是他再熟悉不能的峰云凋戈。順著槍身，他看到那白皙蔥指有著微不可察的顫抖。" },
     { name: "褚冥漾", text: "學長......為什麼......", face: "blood" },
-    { name: "冰炎", text: "閉嘴！褚冥漾！", face: "angry" },
+    { name: "冰炎 ", text: "閉嘴！褚冥漾！", face: "angry" },
     { name: "  ", text: "學長打斷他的口氣有著憤恨、失望。紅瞳中倒映著褚冥漾蒼白的面容，可卻被憎恨充盈。" },
-    { name: "冰炎", text: "你——背叛了我們——", face: "angry" },
+    { name: "冰炎 ", text: "你——背叛了我們——", face: "angry" },
     { name: "  ", text: "褚冥漾想要辯解，但一啟唇就是一口腥甜。絳紅順著嘴角流下，褚冥漾雙腿已快無力。" },
     { name: "褚冥漾", text: "我......沒有......我......沒......背、背叛......", face: "blood" },
-    { name: "冰炎", text: "住口！", face: "angry" },
+    { name: "冰炎 ", text: "住口！", face: "angry" },
     { name: "  ", text: "不願看到曾經的學弟那乞求的目光，冰炎眼一閉。" },
     { name: "  ", text: "他還是顧及褚冥漾之間的情份；他能做的就是減少對方的痛苦，送對方儘早投胎。" },
     { name: "  ", text: "噗嗤！", action: [
@@ -884,8 +1009,8 @@ const DIALOGS = {
   { type: "show", actor: "moon" }
   ]},
     { name: "  ", text: "來人聲音不大，卻一下吸引了所有人的注意——是白陵然，身後跟著褚冥玥。", action: [
-      { type: "runTo", actor: "ran", x: 435, y: 200, ms: 800 },
-      { type: "runTo", actor: "moon", x: 400, y: 205, ms: 600 } 
+      { type: "runTo", actor: "ran", x: 435, y: 200, ms: 600 },
+      { type: "runTo", actor: "moon", x: 400, y: 205, ms: 450 } 
     ]},
     { name: "  ", text: "若是平時，在看到白陵然後，褚冥漾應該會感到安心，然而一堆好友腦袋突然變得不正常，加上白陵然和褚冥玥兩人凝重的臉色，讓褚冥漾有種非常、非常不好的預感。" },
     { name: "  ", text: "白陵然率先開口，他幾乎是用一種痛心疾首的表情看著褚冥漾，聲音很輕：" },
@@ -931,7 +1056,7 @@ const DIALOGS = {
     { name: "褚冥漾", text: "『千冬歲？你終於要清醒了嗎？』", face: "really" },
     { name: "褚冥漾", text: "『快看清楚啊！對面這個別說是鬼族了，根本就是個咖啡杯啊！！還有很多奇怪的地方啊！！！』", face: "nolove" },
     { name: "千冬歲", text: "褚冥漾你竟然還跟鬼族勾結！！！", action: [
-       { type: "emote", actor: "qian", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
+      { type: "emote", actor: "qian", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
       { type: "jump", actor: "qian" }
    ]},
     { name: "褚冥漾", text: "（發自內心）幹！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
@@ -939,55 +1064,132 @@ const DIALOGS = {
     { name: "千冬歲", text: "我的視力不需要背叛者關心！"},
     { name: "褚冥漾", text: "我不是那個意思！！", face: "wtf" },
     { name: "  ", text: "也許是笑話終於看夠了，此時安地爾才慢悠悠開口：" },
-    { name: "安地爾", text: "那麼凡斯的後代，既然你都被白色種族排斥了，要不要乾脆加入我這裡呢？", action: { type: "branch_andiel" } },
+    { name: "安地爾", text: "那麼凡斯的後代，既然你都被白色種族排斥了，要不要乾脆加入我這裡呢？", action: { type: "andiel_tease" } },
 
   ]
 };
-
-
 // =========================
-// Dialog patch: Andiel branch (two-stage choice)
+// Dialog patch: Andiel branch (two-stage choice) (guarded)
 // =========================
 (function patchAndielBranchDialogs(){
-  try{
-    const lines = DIALOGS?.white_garden;
-    if (!Array.isArray(lines)) return;
+  if (window.__ANDIEL_DIALOG_PATCHED__) return;
+  window.__ANDIEL_DIALOG_PATCHED__ = true;
 
-    // 確保 coffee_branch 存在（避免選項一切圖後找不到對話）
+  try{
+    // Ensure ending/branch dialogs exist
     if (!DIALOGS.coffee_branch) {
       DIALOGS.coffee_branch = [
-        { name: "  ", text: "（你被帶離白園，來到一個詭異又荒謬的地方——咖啡杯的立繪居然在跟你對話。）" },
-        { name: "褚冥漾", face: "wtf", text: "……我到底為什麼會走到這一步。" },
-        { name: "安地爾", text: "歡迎，凡斯的後代。接下來就有趣了。" },
+        { name: "  ", text: "(......)" },
+        { name: "  ", text: "一陣白光閃過，耳邊被帶離白園，來到一個詭異又荒謬......不，一個看起來意外的正常的地方。", action: { type: "show", actor: "coffee" } },
+        { name: "安地爾", text: "歡迎來到我的休假地點。", action: { type: "toPlayer", actor: "coffee", enterFrom: "left", enterDist: 260, side: "right", gapY: 1, ms: 150 } },
+        { name: "褚冥漾", text: "......咖啡廳？", face: "really" },
+        { name: "  ", text: "不是褚冥漾想像中的黑色空間還是什麼詭異地方之類的，這裡的裝潢溫馨，空氣中甚至能聞到淡淡的咖啡香味。" },
+        { name: "  ", text: "安地爾臉上仍是那副輕鬆的笑容，他緩步走到畫面中唯一的桌椅旁，卻沒有坐下。", action: { type: "runTo", actor: "coffee", x: 325, y: 175, ms: 900 } },
+        { name: "  ", text: "也許是因為根本坐不下。" },
+        { name: "褚冥漾", text: "『你是在賣你自己嗎？』" },
+        { name: "安地爾", text: "你好像在想一些很失禮的事情呢。" },
+        { name: "褚冥漾", text: "。", face: "uh" },
+        { name: "  ", text: "安地爾似乎絲毫不在意褚冥漾擺出的態度，" },
+
+      ];
+    }
+    if (!DIALOGS.ending_B) {
+      DIALOGS.ending_B = [
+        { name: "安地爾", text: "真遺憾。", action: [
+      { type: "show", actor: "qian" },
+      { type: "show", actor: "cat" },
+      { type: "show", actor: "ryan" },
+      { type: "show", actor: "angel" },
+      { type: "show", actor: "five" },
+      { type: "show", actor: "twins1" },
+      { type: "show", actor: "twins2" },
+      { type: "show", actor: "bigbro" },
+      { type: "show", actor: "ran" },
+      { type: "show", actor: "moon" },
+      { type: "show", actor: "coffee" },
+  ] },
+        { name: "褚冥漾", text: "你是不是對自己現在長什麼樣不太清楚。", face: "deny" },
+        { name: "  ", text: "安地爾沒有再試圖逼迫褚冥漾，反而只是輕鬆的聳了聳肩。" },
+        { name: "安地爾", text: "別緊張，我都說我現在是休假狀態了。" },
+        { name: "  ", text: "說完，安地爾竟然就這麼離開了，讓人完全摸不清楚頭腦。", action: { type: "runTo", actor: "coffee", x: 1000, y: 205, ms: 450 } },
+        { name: "褚冥漾", text: "......這傢伙到底來幹嘛的？", face: "uh" },
+        { name: "千冬歲", text: "褚冥漾你還不認罪嗎？", action: { type: "jump", actor: "qian" } },
+        { name: "褚冥漾", text: "......差點忘記你了。", face: "cry", action: [
+      { type: "face", actor: "chu", dir: "left" },
+      { type: "move", actor: "chu", dx: 10, dy: 0, ms: 200 },
+      { type: "face", actor: "five", dir: "left" },
+      { type: "face", actor: "bigbro", dir: "left" },
+      { type: "face", actor: "twins2", dir: "right" },
+      { type: "face", actor: "twins1", dir: "left" }
+      ] },
+        { name: "？？？", text: "褚冥漾！！！", action: [
+          { type: "toPlayer", actor: "bing", enterFrom: "left", side: "left", offsetX: 600, ms: 250 },
+          { type: "show", actor: "bing" },
+       ] },
+        { name: "褚冥漾", text: "怎麼還有啊！！！", face: "wtf" },
+        { name: "  ", text: "來人褚冥漾再熟悉不過，一雙紅色的眼眸穿過人群直直瞪向他，眼裡燃燒的怒火像是快把他吞噬。", action: [
+      { type: "runTo", actor: "angel", x: 435, y: 255, ms: 450 },
+      { type: "runTo", actor: "ran", x: 415, y: 235, ms: 450 },
+      { type: "runTo", actor: "moon", x: 380, y: 235, ms: 450 },
+      { type: "runTo", actor: "bing", x: 440, y: 205, ms: 450 },
+    ] },
+        { name: "冰炎 ", text: "你——背叛了我們——", face: "angry" },
+        { name: "褚冥漾", text: "學長，怎麼你也腦子不正常了！", face: "nolove" },
+        { name: "褚冥漾", text: "不對，怎麼感覺這個對話似曾相似？", face: "really" },
+        { name: "？？？", text: "那是因為你在作夢。", action: { type: "show", actor: "bingt" } },
+        { name: "  ", text: "", action: [
+      { type: "face", actor: "bingt", dir: "left" },
+      { type: "toPlayer", actor: "bingt", enterFrom: "right", side: "right", offsetX: 32, ms: 250 },
+       ] },
+        { name: "褚冥漾", text: "咦？！！", face: "shock", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+        { name: "  ", text: "褚冥漾猛地回頭，身後的那人是如此的熟悉，銀色的長髮在腦後束成俐落的馬尾，紅色的眼眸微微瞇起，正似笑非笑的盯著褚冥漾。", action: { type: "face", actor: "chu", dir: "left" } },
+        { name: "褚冥漾", text: "？？？", face: "shock", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
+        { name: "冰炎", text: "......你在幹嘛？", action: { type: "emote", actor: "qian", key: "angry", ms: 600, dx: 10, dy: 15, scale: 0.4 }, face: "dark" },
+        { name: "褚冥漾", text: "在確認哪個是學長。"},
+        { name: "  ", text: "冰炎的嘴角抽搐了一下，閉上眼揉了揉眉心，額角青筋直跳捏緊拳頭看向褚冥漾。" },
+        { name: "冰炎", text: "需要我幫你回憶一下嗎？", face: "close" },
+
       ];
     }
 
-    const i = lines.findIndex(l => l?.action?.type === "branch_andiel");
+//, action: [
+//      { type: "move", actor: "bing", dx: 10, dy: 0, ms: 200 },
+//      { type: "sfx", key: "hit", volume: 0.5 },
+//       ]
+
+    const lines = DIALOGS?.white_garden;
+    if (!Array.isArray(lines)) return;
+
+    // 找到安地爾那句（用 text 內容定位，不靠 action，避免版本打架）
+    const i = lines.findIndex(l => (l?.name === "安地爾") && (typeof l?.text === "string") && l.text.includes("凡斯的後代"));
     if (i < 0) return;
 
-    // 把原本那句改成：先跳 tease popup
-    lines[i].action = { type: "andiel_tease" };
+    // 如果已經有 andiel_choice 注入，就不要再注入第二次
+    const already = lines.slice(i+1, i+10).some(l => l?.action?.type === "andiel_choice" || l?.__andielInjected === true);
+    // 把這句設成 tease（只設一次）
+    if (!lines[i].action) lines[i].action = { type: "andiel_tease" };
 
-    // 插入吐槽 + 真正選擇
+    if (already) return;
+
     const injected = [
-      { name: "褚冥漾", face: "wtf", text: "為什麼會有選項啊？！我是在玩遊戲嗎？", action: { type: "andiel_tease" } },
-      { name: "  ", text: "（建議按S存檔）" },
-      { name: "  ", text: "（現在，真的要做出選擇了。）", action: { type: "andiel_choice" } },
-
-      // ✅ 選項二會留在白園繼續：先給你幾句接續（你可再自己加）
-      { name: "安地爾", text: "真遺憾。" },
-      { name: "褚冥漾", face: "deny", text: "比起跟咖啡杯走，我寧願被你氣死。" },
-      { name: "  ", text: "安地爾沒有再逼迫，只是笑得意味深長。" },
+      { name: "褚冥漾", face: "wtf", text: "為什麼會有選項啊？！我是在玩遊戲嗎？", __andielInjected: true },
+      { name: "  ", text: "（建議按S存檔）", __andielInjected: true },
+      { name: "  ", text: "（現在，真的要做出選擇了。）", action: { type: "andiel_choice" }, __andielInjected: true },
+      // opt2 的後續不要直接放在這裡，避免「沒選也看得到」；由 andiel_choice 自己切到 ending_B
     ];
 
-    // 避免重複插入：若後面已經有 andiel_choice 就不再插
-    const already = lines.slice(i+1, i+6).some(l => l?.action?.type === "andiel_choice");
-    if (!already) lines.splice(i+1, 0, ...injected);
+    lines.splice(i+1, 0, ...injected);
   } catch(e) {
     console.warn("[patchAndielBranchDialogs] failed", e);
   }
 })();
-
 
 // 1) 章節順序（一定要放在 currentDialogId 前）
 const STORY_FLOW = [
@@ -1002,6 +1204,10 @@ let storyStep = 0;          // 目前跑到第幾段（第幾章節）
 let currentDialogId = STORY_FLOW[0];
 let storyIndex = 0;         // 章節內第幾句
 let dialogOpen = false;
+
+// ===== Branch flags =====
+let andielBranch = null;           // null | "opt1" | "opt2"
+let __BLOCK_AUTO_NEXT_ONCE__ = false; // 避免換章節時 auto-next 跳過第一句
 
 function normalizeName(n) {
   return (n || "").trim();
@@ -1146,6 +1352,36 @@ function shouldCoffeeBeVisible(lines, idx) {
   }
   return false;
 }
+function shouldActorBeVisibleByShowAction(lines, idx, actorKey) {
+  for (let i = 0; i <= idx; i++) {
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === actorKey)) return true;
+  }
+  return false;
+}
+
+function shouldBingVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "bing")) return true;
+  }
+  return false;
+}
+
+function shouldBingtVisible(lines, idx) {
+  for (let i = 0; i <= idx; i++) {
+    const n = normalizeName(lines[i]?.name);
+
+    const action = lines[i]?.action;
+    const arr = Array.isArray(action) ? action : [action];
+    if (arr.some(a => a && a.type === "show" && a.actor === "bingt")) return true;
+  }
+  return false;
+}
 
 function flattenActions(action) {
   if (!action) return [];
@@ -1157,6 +1393,7 @@ function lineMentionsBing(line) {
   if (n === "冰炎") return true;
   return flattenActions(line?.action).some(a => a?.actor === "bing");
 }
+
 
 function applyStoryWorldState(scene) {
   if (!scene?.actors) return;
@@ -1177,6 +1414,7 @@ function applyStoryWorldState(scene) {
   const twins2 = scene.actors.twins2;
   const bigbro = scene.actors.bigbro;
   const coffee = scene.actors.coffee;
+  const bingt = scene.actors.bingt;
 
   // ---- 預設：先清掉殘留（重要） ----
   if (bing?.setVisible) bing.setVisible(false);
@@ -1191,6 +1429,7 @@ function applyStoryWorldState(scene) {
   if (twins2?.setVisible) twins2.setVisible(false);
   if (bigbro?.setVisible) bigbro.setVisible(false);
   if (coffee?.setVisible) coffee.setVisible(false);
+  if (bingt?.setVisible) bingt.setVisible(false);
 
   // ========== A) prologue_fire：冰炎 ==========
   if (currentDialogId === "prologue_fire" && bing && chu) {
@@ -1251,46 +1490,90 @@ function applyStoryWorldState(scene) {
   qian.setVisible(shouldqianBeVisible(lines, idx));
 }
 
+if (currentDialogId === "ending_B" && qian) {
+  qian.setVisible(shouldqianBeVisible(lines, idx));
+}
+
 if (currentDialogId === "white_garden" && cat) {
   cat.setVisible(shouldcatBeVisible(lines, idx));
 }
-  
+if (currentDialogId === "ending_B" && cat) {
+  cat.setVisible(shouldcatBeVisible(lines, idx));
+}
+
 if (currentDialogId === "white_garden" && ryan) {
+  ryan.setVisible(shouldryanBeVisible(lines, idx));
+}
+if (currentDialogId === "ending_B" && ryan) {
   ryan.setVisible(shouldryanBeVisible(lines, idx));
 }
 
 if (currentDialogId === "white_garden" && angel) {
   angel.setVisible(shouldAngelBeVisible(lines, idx));
 }
+if (currentDialogId === "ending_B" && qian) {
+  angel.setVisible(shouldAngelBeVisible(lines, idx));
+}
 
 if (currentDialogId === "white_garden" && five) {
+  five.setVisible(shouldFiveBeVisible(lines, idx));
+}
+if (currentDialogId === "ending_B" && five) {
   five.setVisible(shouldFiveBeVisible(lines, idx));
 }
 
 if (currentDialogId === "white_garden" && moon) {
   moon.setVisible(shouldMoonBeVisible(lines, idx));
 }
-  
+if (currentDialogId === "ending_B" && moon) {
+  moon.setVisible(shouldMoonBeVisible(lines, idx));
+}
+
 if (currentDialogId === "white_garden" && ran) {
+  ran.setVisible(shouldRanBeVisible(lines, idx));
+}
+if (currentDialogId === "ending_B" && ran) {
   ran.setVisible(shouldRanBeVisible(lines, idx));
 }
 
 if (currentDialogId === "white_garden" && twins1) {
   twins1.setVisible(shouldTwins1BeVisible(lines, idx));
 }
+if (currentDialogId === "ending_B" && twins1) {
+  twins1.setVisible(shouldTwins1BeVisible(lines, idx));
+}
 
 if (currentDialogId === "white_garden" && twins2) {
+  twins2.setVisible(shouldTwins2BeVisible(lines, idx));
+}
+if (currentDialogId === "ending_B" && twins2) {
   twins2.setVisible(shouldTwins2BeVisible(lines, idx));
 }
 
 if (currentDialogId === "white_garden" && bigbro) {
   bigbro.setVisible(shouldBroBeVisible(lines, idx));
 }
+if (currentDialogId === "ending_B" && bigbro) {
+  bigbro.setVisible(shouldBroBeVisible(lines, idx));
+}
 
 if (currentDialogId === "white_garden" && coffee) {
   coffee.setVisible(shouldCoffeeBeVisible(lines, idx));
 }
+if (currentDialogId === "coffee_branch" && coffee) {
+  coffee.setVisible(shouldActorBeVisibleByShowAction(lines, idx, "coffee"));
+}
+if (currentDialogId === "ending_B" && coffee) {
+  coffee.setVisible(shouldCoffeeBeVisible(lines, idx));
+}
 
+if (currentDialogId === "ending_B" && bing) {
+  bing.setVisible(shouldBingVisible(lines, idx));
+}
+
+if (currentDialogId === "ending_B" && bingt) {
+  bingt.setVisible(shouldBingtVisible(lines, idx));
+}
 }
 
 function lineHasGotoStage(line) {
@@ -1310,7 +1593,9 @@ async function renderDialog() {
 
     const delay = line.autoDelay ?? 350;
     setTimeout(() => {
-      if (dialogOpen) nextDialog();
+      if (!dialogOpen) return;
+      if (__BLOCK_AUTO_NEXT_ONCE__) { __BLOCK_AUTO_NEXT_ONCE__ = false; return; }
+      nextDialog();
     }, delay);
 
     return;
@@ -1345,7 +1630,9 @@ async function renderDialog() {
   if (line?.auto) {
     const delay = line.autoDelay ?? 350;
     setTimeout(() => {
-      if (dialogOpen) nextDialog();
+      if (!dialogOpen) return;
+      if (__BLOCK_AUTO_NEXT_ONCE__) { __BLOCK_AUTO_NEXT_ONCE__ = false; return; }
+      nextDialog();
     }, delay);
   }
 }
@@ -1378,6 +1665,20 @@ function nextDialog() {
 
 if (storyIndex >= lines.length) {
   closeDialog();
+
+  // ✅ ending_B：結局 B 結束就直接 END（不進下一章）
+  if (currentDialogId === "ending_B") {
+    gameFinished = true;
+    showEndOverlay();
+    return;
+  }
+
+  // ✅ 安地爾分支：選項二走結局 B（留在白園，不進下一章）
+  if (currentDialogId === "white_garden" && andielBranch === "opt2") {
+    gameFinished = true;
+    showEndOverlay();
+    return;
+  }
 
   if (storyStep < STORY_FLOW.length - 1) {
     storyStep++;
@@ -1608,6 +1909,73 @@ if (ingameMode === "saveConfirm") {
 }, { capture:true });
 refreshContinueButton();
 
+window.__ACTOR_VIS_SNAPSHOT__ = null;
+
+function snapshotActorVisibility(scene) {
+  const snap = {};
+  const actors = scene?.actors || {};
+  for (const [k, a] of Object.entries(actors)) {
+    if (!a) continue;
+    snap[k] = {
+      visible: !!a.visible,
+      alpha: a.alpha,
+      angle: a.angle,
+      flipX: !!a.flipX,
+      // 你也可以加 facing / __isDown 等
+      facing: a.facing ?? null,
+      isDown: !!a.__isDown,
+    };
+  }
+  // 也存 player（如果你 player 不在 actors）
+  if (scene?.player) {
+    snap.__player__ = {
+      visible: !!scene.player.visible,
+      alpha: scene.player.alpha,
+      angle: scene.player.angle,
+      flipX: !!scene.player.flipX,
+      facing: scene.player.facing ?? null,
+    };
+  }
+  window.__ACTOR_VIS_SNAPSHOT__ = snap;
+}
+
+function applyActorVisibilitySnapshot(scene) {
+  const snap = window.__ACTOR_VIS_SNAPSHOT__;
+  if (!snap) return false;
+
+  const actors = scene?.actors || {};
+  for (const [k, s] of Object.entries(snap)) {
+    if (k === "__player__") continue;
+    const a = actors[k];
+    if (!a) continue;
+
+    if (s.visible != null) a.setVisible(!!s.visible);
+    if (s.alpha != null) a.alpha = s.alpha;
+    if (s.angle != null) a.angle = s.angle;
+    if (s.flipX != null) a.setFlipX(!!s.flipX);
+    if (s.facing != null) a.facing = s.facing;
+
+    // 倒地狀態（依你專案習慣調）
+    if (s.isDown) {
+      a.__isDown = true;
+      // angle/alpha 已套過了，不一定要重設
+    } else {
+      a.__isDown = false;
+    }
+  }
+
+  if (scene?.player && snap.__player__) {
+    const s = snap.__player__;
+    if (s.visible != null) scene.player.setVisible(!!s.visible);
+    if (s.alpha != null) scene.player.alpha = s.alpha;
+    if (s.angle != null) scene.player.angle = s.angle;
+    if (s.flipX != null) scene.player.setFlipX(!!s.flipX);
+    if (s.facing != null) scene.player.facing = s.facing;
+  }
+
+  return true;
+}
+
 function runAction(action) {
   if (!action) return Promise.resolve();
 
@@ -1624,55 +1992,99 @@ function runAction(action) {
   if (!scene || !A) return Promise.resolve();
 
   const getActor = (key) => A[key];
+  // =========================
+  // Andiel branch actions (A/B endings) (guarded by window flags)
+  // =========================
+  window.__ANDIEL_BRANCH__ = window.__ANDIEL_BRANCH__ || null;
 
-  // ===== Branch: 安地爾邀請 =====
   if (action.type === "andiel_tease") {
-    return openChoiceTease({
+    return (window.openChoiceTease ? window.openChoiceTease({
       title: "請選擇",
-      desc: "請先Enter/Space繼續",
+      desc: "請先 Enter/Space 繼續",
       options: [
         { text: "我就是餓死，死外邊，從這裡跳下去，也不會跟你走！！！" },
         { text: "你要不要看看你現在長什麼樣子？？？" },
       ],
-    });
+    }) : Promise.resolve());
   }
+
   if (action.type === "andiel_choice") {
     return (async () => {
-      const pick = await openChoicePick({
-        title: "請選擇",
-        desc: "要怎麼回應安地爾？（⭡⭣選擇，Enter/Space確認）",
-        options: [
-          { text: "我就是餓死，死外邊，從這裡跳下去，也不會跟你走！！！" },
-          { text: "你要不要看看你現在長什麼樣子？？？" },
-        ],
-      });
+      const pick = window.openChoicePick
+        ? await window.openChoicePick({
+            title: "請選擇",
+            desc: "要怎麼回應安地爾？（⭡⭣選擇，Enter/Space確認）",
+            options: [
+              { text: "我就是餓死，死外邊，從這裡跳下去，也不會跟你走！！！" },
+              { text: "你要不要看看你現在長什麼樣子？？？" },
+            ],
+          })
+        : 0;
 
+      // 0 = opt1, 1 = opt2
       if (pick === 0) {
-        // ✅ 選項一：切到咖啡地圖，開啟新劇情（你可再補更多對話）
-        await runAction([
-          { type: "fadeBlack", to: 1, ms: 220 },
-          { type: "gotoStage", stage: "coffee", spawn: "default" },
-          { type: "fadeBlack", to: 0, ms: 220 },
-        ]);
+        window.__ANDIEL_BRANCH__ = "opt1";
+        andielBranch = "opt1";
 
-        // 這裡用「換章節」的方式：若你之後把 coffee_branch 加進 STORY_FLOW，就會自動走線性流程。
-        // 如果沒有加進 STORY_FLOW，也可以照樣播放 coffee_branch，結束後會回到原本流程最後一章的結局。
-        
-// ✅ 走到分支章節（讓後續 nextDialog 不會跑回原本 STORY_FLOW 結尾）
-const idx = STORY_FLOW.indexOf("coffee_branch");
-if (idx >= 0) storyStep = idx;
-openCurrentDialog(); // 會自動 storyIndex=0 並 render
-return;
+        // 在 white_garden 當前行後插入「多講幾句」：玩家 Enter 下一句，最後才切圖
+        const lines = DIALOGS?.[currentDialogId];
+        if (Array.isArray(lines)) {
+          // 若之前有殘留 opt2 標記，先移掉（防止章節打架）
+          for (let k = storyIndex + 1; k < lines.length; ) {
+            if (lines[k]?._andiel === "opt2") lines.splice(k, 1);
+            else break;
+          }
+
+          const opt1Seq = [
+            { name: "安地爾", text: "這可不是你能決定的。", _andiel: "opt1" },
+            { name: "褚冥漾", face: "wtf", text: "你是在上演什麼霸道咖啡杯狠狠愛嗎！！！", _andiel: "opt1" },
+            // ✅ 空白 auto 行：先跑 action，再自動 next
+            { name: "", text: "", auto: true, autoDelay: 60, action: { type: "andiel_opt1_go" }, _andiel: "opt1" },
+          ];
+
+          lines.splice(storyIndex + 1, 0, ...opt1Seq);
+        }
+        return; // 交給玩家按 Enter 看完再切圖
       }
 
-      // ✅ 選項二：留在原地，人物座標不變，劇情照白園往下
+      // pick === 1 → opt2 直接走結局 B（不切圖、不進 opt1）
+      window.__ANDIEL_BRANCH__ = "opt2";
+      andielBranch = "opt2";
+
+      // 直接切到 ending_B 對話（保持在當前地圖/人物位置）
+      snapshotActorVisibility(window.__SCENE__);
+      currentDialogId = "ending_B";
+      storyIndex = 0;
+      dialogOpen = true;
+      dialogEl.classList.add("show");
+      renderDialog();
       return;
     })();
   }
 
-if (action.type === "branch_andiel") {
-  return runBranchAndiel(scene);
-}
+  if (action.type === "andiel_opt1_go") {
+    return (async () => {
+      // 防止 auto-next 把 coffee_branch 第一行直接跳過
+      window.__BLOCK_AUTO_NEXT_ONCE__ = true;
+      snapshotActorVisibility(window.__SCENE__);
+
+      await runAction([
+        { type: "flashWhite", peak: 0.9, msIn: 80, msOut: 220 },
+        { type: "fadeBlack", to: 1, ms: 280 },
+        { type: "gotoStage", stage: "coffee", spawn: "default" },
+        { type: "fadeBlack", to: 0, ms: 280 },
+      ]);
+
+      // 開啟結局 A 對話（coffee_branch）
+      const idx = Array.isArray(STORY_FLOW) ? STORY_FLOW.indexOf("coffee_branch") : -1;
+      if (idx >= 0) storyStep = idx;
+      currentDialogId = "coffee_branch";
+      storyIndex = 0;
+      dialogOpen = true;
+      dialogEl.classList.add("show");
+      renderDialog();
+    })();
+  }
 
   if (action.type === "runTo") {
   const actor = getActor(action.actor);
@@ -2235,6 +2647,7 @@ if (action.type === "face") {
     bigbro: "bigbro_front",
     coffee: "coffee_front",
     chu: "chu_front",
+    bingt: "bingt_front",
   };
 
   actor.setTexture(TEX[action.actor] ?? "chu_front");
@@ -2264,6 +2677,7 @@ preload() {
   this.load.image("twins2_front", "assets/img/twins2_front.png");
   this.load.image("bigbro_front", "assets/img/bigbro_front.png");
   this.load.image("coffee_front", "assets/img/coffee_front.png");
+  this.load.image("bingt_front", "assets/img/bingt_front.png");
   this.load.image("angry", "assets/img/angry.png"); 
   // 你如果之後有冰炎/第三人，也可以加
   // this.load.image("bing_front", "assets/bing_front.png");
@@ -2401,6 +2815,11 @@ for (const colName of collisionNames) {
 }
 
   create(data = {}) {
+  const gs = ensureGameState();  
+  const shown = bootShowWarningOnce(this);
+  // 只有「首次進入或回主選單」才顯示主選單；
+  // startNewGame()/continueGame() 會把 phase 設為 playing，再重啟場景時就不該被這裡拉回主選單。
+  if (!shown && gs.phase === "menu") showMenu();
   // ============ 熱鍵：選單 / 重開 ============
   this.input.keyboard.on("keydown-R", () => {
     const gs = ensureGameState();
@@ -2443,7 +2862,7 @@ for (const colName of collisionNames) {
     twins2: this.add.sprite(240, 200, "twins2_front").setVisible(false),
     bigbro: this.add.sprite(240, 200, "bigbro_front").setVisible(false),
     coffee: this.add.sprite(240, 200, "coffee_front").setVisible(false),
-
+    bingt: this.add.sprite(240, 200, "bingt_front").setVisible(false),
   };
 
   this.player = this.actors.chu;
@@ -2467,6 +2886,7 @@ for (const colName of collisionNames) {
   this.actors.twins2.facing = "right";
   this.actors.bigbro.facing = "right";
   this.actors.coffee.facing = "right";
+  this.actors.bingt.facing = "left";
 
   // 角色比例
   this.actors.bing.setScale(1.08);
@@ -2481,6 +2901,7 @@ for (const colName of collisionNames) {
   this.actors.twins2.setScale(1.11);
   this.actors.bigbro.setScale(1.1);
   this.actors.coffee.setScale(1.09);
+  this.actors.bingt.setScale(1.08);
 
   // 深度（你之後會用 layer depth 再蓋過這些）
   this.actors.chu.setDepth(30);
@@ -2496,9 +2917,9 @@ for (const colName of collisionNames) {
   this.actors.twins2.setDepth(29);
   this.actors.bigbro.setDepth(29);
   this.actors.coffee.setDepth(29);
+  this.actors.bingt.setDepth(29);
 
   // ============ GameState / 讀檔決定初始地圖 ============
-  const gs = ensureGameState();
   const initStage = gs.pendingLoad?.stage || window.__STAGE__ || "prologue_fire";
 
   // 載入地圖（一定要在 overlap/trigger 之前）
@@ -2637,6 +3058,8 @@ this.applyStageTriggers = (stage) => {
 
   // 讓全域可取到 scene
   window.__SCENE__ = this;
+
+  // （警語已在 create() 一開始處理；這裡不要再呼叫，避免重複綁事件/開兩次計時器）
 
   // ============ Continue：套用讀檔（只做一次） ============
   if (gs.pendingLoad) {
