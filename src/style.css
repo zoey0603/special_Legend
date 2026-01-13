@@ -344,3 +344,68 @@ html, body { margin:0; padding:0; background:#111; height:100%; }
   background: rgba(20,20,20,.92);
   color: #fff;
 }
+/* ===== 分支選項彈窗 ===== */
+#choicePopup { display: none; }
+#choicePopup.show { display: flex; }
+
+#choicePopup.popup{
+  position: fixed;
+  inset: 0;
+  z-index: 96000;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(2px);
+}
+
+#choicePopup .panel{
+  width: min(520px, 92vw);
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(18,18,18,.92);
+  box-shadow: 0 14px 40px rgba(0,0,0,.55);
+  color:#fff;
+}
+
+#choicePopup .title{
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  margin-bottom: 12px;
+}
+
+#choicePopup button{
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.06);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  transition: transform .06s ease, background .12s ease, border-color .12s ease;
+  outline: none;
+}
+
+#choicePopup button:hover{
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.24);
+}
+
+#choicePopup button:active{
+  transform: translateY(1px);
+}
+
+#choicePopup button.active,
+#choicePopup button:focus-visible{
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.38);
+  box-shadow: 0 0 0 3px rgba(255,255,255,.10);
+}
+
+/* 假選項階段：按鈕看得到，但不可點（仍可用 Next 繼續） */
+#choicePopup.is-tease #choiceBtns button{
+  opacity: .75;
+  pointer-events: none;
+}
