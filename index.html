@@ -12,14 +12,38 @@
 </head>
 <body>
   <div id="game"></div>
+<!-- Warning Overlay -->
+<div id="warningOverlay" class="warning-overlay is-hidden" aria-hidden="true">
+  <div class="warning-panel">
+    <!-- 這個是「顯示用」：JS 會把打字機內容逐字塞進來 -->
+    <div id="warningText" class="warning-text"></div>
+    <!-- 這個是「全文來源」：文字由 HTML 管理，JS 只讀 textContent -->
+    <pre id="warningFull" class="warning-full">
+Warming
 
-  <div id="menu" class="show">
+★溫馨提醒：遊玩過程中，請勿快速按enter鍵，以避免出現立繪跑不出來、漾漾被當抹布拖等問題。
+
+此遊戲為低成本同人創作，純粹為愛發電，無人收錢，劇情基於古早背叛文的基礎創作，如有雷同，純屬雷同
+人物在搞笑基礎上進行了一定程度的藝術加工，無cp，若感覺不適，請立刻按下右上角叉叉退出
+製作組家庭幸福，父母健在，身體健康，上路遵守交通規則，無任何心理或精神疾病
+此創作純為博您一笑，作品無任何暗示隱喻，不牽涉時事、政治，不代表特殊傳說作者護玄與繪師紅麟進行創作，使用素材除音樂皆來源製作組自行創作
+如感覺素材有AI疑慮，皆為繪師畫工不到家之緣故
+（本人與繪師關係良好，以上聲明皆經過繪師本人過目）
+如果您看完這一大串聲明，您不管做什麼都會成功的！
+感謝您的觀看，祝您平安喜樂！遊玩愉快！
+Enter/Space繼續
+    </pre>
+  </div>
+</div>
+
+  <!-- 主選單預設隱藏：由 game.js 決定何時顯示（警語結束後/再次進入時） -->
+  <div id="menu">
   <div class="menu-box">
     <h1 class="menu-title">主選單</h1>
 
     <div id="menuHelp" class="menu-help">
       ↑↓←→ 移動　Enter 確認　Esc 返回/關閉 設定：←→ 調整音量<br/>
-      遊戲中：S 存檔　Q 開啟副選單　R 回主選單　Esc 返回/關閉
+      遊戲中：S 存檔　Q 開啟副選單　R 開主選單　
     </div>
 
     <div id="menuToast" class="menu-toast hide"></div>
@@ -33,7 +57,7 @@
       <label>音效 <input id="sfxVol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
     </div>
 
-    <div class="menu-hint">R：回主選單</div>
+    <div class="menu-hint">Esc 返回/關閉</div>
   </div>
 </div>
 
@@ -54,7 +78,6 @@
     <button id="btnSaveNo">返回</button>
   </div>
 </div>
-
 
 <div id="toast" class="toast">已存檔</div>
 
@@ -102,7 +125,3 @@
   <script src="./src/game.js"></script>
 </body>
 </html>
-t>
-</body>
-</html>
-
