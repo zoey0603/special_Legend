@@ -971,10 +971,11 @@ const DIALOGS = {
     // 插入吐槽 + 真正選擇
     const injected = [
       { name: "褚冥漾", face: "wtf", text: "為什麼會有選項啊？！我是在玩遊戲嗎？", action: { type: "andiel_tease" } },
+      { name: "  ", text: "（建議按S存檔）" },
       { name: "  ", text: "（現在，真的要做出選擇了。）", action: { type: "andiel_choice" } },
 
       // ✅ 選項二會留在白園繼續：先給你幾句接續（你可再自己加）
-      { name: "安地爾", text: "呵……你的嘴還真硬。" },
+      { name: "安地爾", text: "真遺憾。" },
       { name: "褚冥漾", face: "deny", text: "比起跟咖啡杯走，我寧願被你氣死。" },
       { name: "  ", text: "安地爾沒有再逼迫，只是笑得意味深長。" },
     ];
@@ -1630,8 +1631,8 @@ function runAction(action) {
       title: "請選擇",
       desc: "請先Enter/Space繼續",
       options: [
-        { text: "你想得美！我腦袋壞掉才會答應你啦！！！" },
-        { text: "我才不跟一個立繪是咖啡杯的傢伙走哩！！！" },
+        { text: "我就是餓死，死外邊，從這裡跳下去，也不會跟你走！！！" },
+        { text: "你要不要看看你現在長什麼樣子？？？" },
       ],
     });
   }
@@ -1639,10 +1640,10 @@ function runAction(action) {
     return (async () => {
       const pick = await openChoicePick({
         title: "請選擇",
-        desc: "要怎麼回應安地爾？",
+        desc: "要怎麼回應安地爾？（⭡⭣選擇，Enter/Space確認）",
         options: [
-          { text: "你想得美！我腦袋壞掉才會答應你啦！！！" },
-          { text: "我才不跟一個立繪是咖啡杯的傢伙走哩！！！" },
+          { text: "我就是餓死，死外邊，從這裡跳下去，也不會跟你走！！！" },
+          { text: "你要不要看看你現在長什麼樣子？？？" },
         ],
       });
 
