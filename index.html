@@ -23,7 +23,8 @@ Warming
 
 ★溫馨提醒：遊玩過程中，請勿快速按enter鍵，以避免出現立繪跑不出來、漾漾被當抹布拖等問題。
 
-此遊戲為低成本同人創作，純粹為愛發電，無人收錢，劇情基於古早背叛文的基礎創作，如有雷同，純屬雷同
+此遊戲為低成本同人創作，純粹為愛發電，無人收錢，劇情基於古早背叛文的基礎創作
+如有雷同，純屬雷同
 人物在搞笑基礎上進行了一定程度的藝術加工，無cp，若感覺不適，請立刻按下右上角叉叉退出
 製作組家庭幸福，父母健在，身體健康，上路遵守交通規則，無任何心理或精神疾病
 此創作純為博您一笑，作品無任何暗示隱喻，不牽涉時事、政治，不代表特殊傳說作者護玄與繪師紅麟進行創作，使用素材除音樂皆來源製作組自行創作
@@ -117,9 +118,25 @@ Enter/Space繼續
       <div class="hint">按 Enter / Space 繼續</div>
     </div>
   </div>
+  
+  <div id="endOverlay" class="end-overlay" aria-hidden="true">
+  <div class="end-panel">
+    <!-- Credits (只在第一次結局前顯示一次) -->
+    <div id="endCredits" class="end-credits" aria-hidden="true">
+      <div class="credits-title">感謝</div>
+      <div class="credits-list">
+        <div class="credit-line">場景、像素、立繪：<span>Yu Zi</span></div>
+        <div class="credit-line">劇情：<span>雪晨</span></div>
+        <div class="credit-line">程式：<span>莫含</span></div>
+      </div>
+      <div class="credits-hint">（即將進入結尾畫面…）</div>
+    </div>
 
-  <div id="endOverlay" class="end-overlay">
-  <div class="end-text"><h1>END - 感謝遊玩<br>(按 A 重新開始)<h1></div>
+    <!-- Main End Text -->
+    <div id="endMain" class="end-text">
+      <h1>END - 感謝遊玩<br>(按 A 重新開始)</h1>
+    </div>
+  </div>
 </div>
 
   <script src="./src/game.js"></script>
