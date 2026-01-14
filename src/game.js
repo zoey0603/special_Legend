@@ -359,7 +359,7 @@ function showEndOverlay() {
       if (store) store.setItem(END_CREDITS_KEY, "1");
       window.__END_CREDITS_TIMER__ = null;
     }, 380);
-  }, 2500);
+  }, 5000);
 }
 
 function hideEndOverlay() {
@@ -1278,7 +1278,7 @@ const DIALOGS = {
         { type: "hide", actor: "bigbro" },
         { type: "hide", actor: "twins1" },
         { type: "sfx", key: "breaking", volume: 0.5 },
-        { type: "cameraShake", ms: 180, intensity: 0.05 },
+        { type: "cameraShake", ms: 180, intensity: 0.1 },
         { type: "fadeBlack", to: 1, ms: 650 },
         { type: "gotoStage", stage: "blackhall", spawn: "bed" },
         { type: "face", actor: "bingt", dir: "right" },
@@ -1304,6 +1304,21 @@ const DIALOGS = {
        ]},
            { name: "  ", text: "（……）",  action: [
         { type: "flashWhite", peak: 0.8, msIn: 60, msOut: 220 },
+        { type: "gotoStage", stage: "blackhall", spawn: "bed" },
+        { type: "face", actor: "bingt", dir: "right" },
+        { type: "face", actor: "chu", dir: "left" },
+        { type: "lay", actor: "chu", ms: 1, angle: 90 },
+        { type: "runTo", actor: "bingt", x: 101, y: 46, ms: 250 },
+        { type: "runTo", actor: "cat", x: 84, y: 68, ms: 250 },
+        { type: "runTo", actor: "qian", x: 81, y: 95, ms: 250 },
+        { type: "runTo", actor: "ryan", x: 101, y: 114, ms: 250 },
+        { type: "runTo", actor: "five", x: 140, y: 47, ms: 250 },
+        { type: "runTo", actor: "moon", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "ran", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "angel", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "twins2", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "bigbro", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "twins1", x: 900, y: 900, ms: 250 },
         { type: "fadeBlack", to: 0, ms: 450 }
        ], auto: true},
         { name: "褚冥漾", text: "哈！", face: "shock", action: [
@@ -3343,3 +3358,4 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
