@@ -155,8 +155,66 @@ html, body { margin:0; padding:0; background:#111; height:100%; }
 #dialogText{ color: #eaeaea; line-height: 1.6; }
 #dialog .hint{ opacity: .75; font-size: 13px; margin-top: 6px; }
 
-.end-overlay{ display:none; position:fixed; inset:0; justify-content:center; align-items:center; }
+.end-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  justify-content:center;
+  align-items:center;
+  background: rgba(0,0,0,.92);
+  z-index: 120000;
+}
 .end-overlay.show{ display:flex; }
+
+/* END 畫面：感謝名單 / 最終文字（同一個 overlay 內切換） */
+.end-screen{
+  display:none;
+  text-align:center;
+  color:#fff;
+  max-width: min(720px, 90vw);
+  padding: 22px 18px;
+}
+.end-screen.show{ display:block; }
+
+.end-credits-inner{
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  border-radius: 16px;
+  padding: 20px 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .35s ease, transform .35s ease;
+}
+.end-credits.show .end-credits-inner{
+  opacity: 1;
+  transform: translateY(0);
+}
+.end-credits.hide .end-credits-inner{
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.end-title{
+  font-size: 28px;
+  letter-spacing: .18em;
+  margin-bottom: 12px;
+  text-shadow: 0 0 14px rgba(255,255,255,.25);
+}
+.end-lines{
+  display:grid;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.7;
+  opacity: .95;
+}
+
+.end-final .end-text h1{
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.35;
+  text-shadow: 0 0 18px rgba(255,255,255,.18);
+}
 
 /* ===== 副選單：左側直式 ===== */
 #ingameMenu { display:none; }
@@ -445,88 +503,4 @@ html, body { margin:0; padding:0; background:#111; height:100%; }
 /* 全文來源不顯示（只給 JS 讀取） */
 .warning-full{
   display: none;
-}
-
-/* ===== END Overlay ===== */
-.end-overlay{
-  display:none;
-  position:fixed;
-  inset:0;
-  z-index: 98000;
-  justify-content:center;
-  align-items:center;
-  background: rgba(0,0,0,.92);
-  backdrop-filter: blur(2px);
-}
-.end-overlay.show{ display:flex; }
-.end-panel{
-  width: min(720px, 92vw);
-  padding: 26px 22px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(18,18,18,.70);
-  box-shadow: 0 12px 40px rgba(0,0,0,.55);
-  text-align: center;
-}
-.end-text{ display:none; }
-.end-text.show{ display:block; }
-
-.end-text h1{
-  margin: 0;
-  font-size: 28px;
-  line-height: 1.35;
-  letter-spacing: .5px;
-  color: #fff;
-}
-
-/* Credits block (一次性) */
-.end-credits{
-  display:none;
-  color:#fff;
-}
-.end-credits.show{ display:block; }
-
-.credits-title{
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  margin-bottom: 12px;
-  position: relative;
-}
-.credits-title::after{
-  content:"";
-  display:block;
-  width: 84px;
-  height: 2px;
-  margin: 10px auto 0;
-  background: rgba(255,255,255,.55);
-}
-
-.credits-list{
-  display:grid;
-  gap: 10px;
-  margin-top: 14px;
-}
-.credit-line{
-  opacity: 0;
-  transform: translateY(10px);
-  animation: creditIn .55s ease-out forwards;
-}
-.credit-line:nth-child(1){ animation-delay: .15s; }
-.credit-line:nth-child(2){ animation-delay: .55s; }
-.credit-line:nth-child(3){ animation-delay: .95s; }
-
-.credit-line span{
-  font-weight: 800;
-  letter-spacing: .5px;
-}
-
-.credits-hint{
-  margin-top: 18px;
-  opacity: .75;
-  font-size: 14px;
-}
-
-@keyframes creditIn{
-  to { opacity: 1; transform: translateY(0); }
 }
