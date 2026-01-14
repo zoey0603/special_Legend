@@ -118,26 +118,25 @@ Enter/Space繼續
       <div class="hint">按 Enter / Space 繼續</div>
     </div>
   </div>
-  
+
   <div id="endOverlay" class="end-overlay" aria-hidden="true">
-  <div class="end-panel">
-    <!-- Credits (只在第一次結局前顯示一次) -->
-    <div id="endCredits" class="end-credits" aria-hidden="true">
-      <div class="credits-title">感謝</div>
-      <div class="credits-list">
-        <div class="credit-line">場景、像素、立繪：<span>Yu Zi</span></div>
-        <div class="credit-line">劇情：<span>雪晨</span></div>
-        <div class="credit-line">程式：<span>莫含</span></div>
+    <!-- ✅ 只顯示一次的感謝名單（由 game.js 控制顯示/隱藏） -->
+    <div id="endCredits" class="end-screen end-credits" aria-hidden="true">
+      <div class="end-credits-inner">
+        <div class="end-title">感謝</div>
+        <div class="end-lines">
+          <div>場景、像素、立繪：Yu Zi</div>
+          <div>劇情：雪晨</div>
+          <div>程式：莫含</div>
+        </div>
       </div>
-      <div class="credits-hint">（即將進入結尾畫面…）</div>
     </div>
 
-    <!-- Main End Text -->
-    <div id="endMain" class="end-text">
-      <h1>END - 感謝遊玩<br>(按 A 重新開始)</h1>
+    <!-- 原本的結尾畫面（按 A 重新開始） -->
+    <div id="endFinal" class="end-screen end-final" aria-hidden="true">
+      <div class="end-text"><h1>END - 感謝遊玩<br>(按 A 重新開始)</h1></div>
     </div>
   </div>
-</div>
 
   <script src="./src/game.js"></script>
 </body>
