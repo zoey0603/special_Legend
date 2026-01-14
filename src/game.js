@@ -279,6 +279,14 @@ function openChoicePick({ title = "請選擇", desc = "", options = [] } = {}) {
 window.__SFX_VOL__ = parseFloat(sfxVolEl.value || "1");
 window.__MUSIC_VOL__ = parseFloat(musicVolEl.value || "1"); // 你之後要做音樂才用
 
+// ===== End Credits (DOM, show once per tab) =====
+// 同一個分頁/同一輪遊戲只顯示一次；重新開始(A)也不再跳。
+const END_CREDITS_KEY = "MZ_END_CREDITS_SHOWN_V1";
+
+function _endStore(){
+  try{ return window.sessionStorage; } catch(_e){ return null; }
+}
+
 function ensureGameState() {
   window.__GAME_STATE__ = window.__GAME_STATE__ || {
     phase: "menu", // "menu" | "playing" | "paused" | "ended"
@@ -294,6 +302,64 @@ function showEndOverlay() {
   endOverlayEl?.classList.add("show");
   gs.phase = "ended";
   gs.finished = true;
+
+  // 在 END 畫面前先插入一次「感謝名單」(2.5 秒)
+  const creditsEl = document.getElementById("endCredits");
+  const finalEl   = document.getElementById("endFinal");
+  const store = _endStore();
+
+  // 沒有 endCredits/endFinal（或 DOM 尚未更新）就直接顯示原本 END
+  if (!creditsEl || !finalEl) {
+    return;
+  }
+
+  // 清掉上次可能留下的計時器
+  if (window.__END_CREDITS_TIMER__) {
+    clearTimeout(window.__END_CREDITS_TIMER__);
+    window.__END_CREDITS_TIMER__ = null;
+  }
+
+  const alreadyShown = !!(store && store.getItem(END_CREDITS_KEY) === "1");
+  if (alreadyShown) {
+    creditsEl.classList.remove("show", "hide");
+    creditsEl.style.display = "none";
+    finalEl.style.display = "block";
+    finalEl.classList.add("show");
+    finalEl.setAttribute("aria-hidden", "false");
+    creditsEl.setAttribute("aria-hidden", "true");
+    return;
+  }
+
+  // 第一次：顯示 credits 2.5s，然後切回 END - 感謝遊玩
+  creditsEl.style.display = "block";
+  finalEl.style.display = "none";
+  finalEl.classList.remove("show");
+  creditsEl.classList.remove("hide");
+  creditsEl.classList.add("show");
+  creditsEl.setAttribute("aria-hidden", "false");
+  finalEl.setAttribute("aria-hidden", "true");
+
+  // 開始時的小延遲，讓 transition 可以吃到
+  requestAnimationFrame(() => creditsEl.classList.add("show"));
+
+  window.__END_CREDITS_TIMER__ = setTimeout(() => {
+    // 先淡出
+    creditsEl.classList.add("hide");
+
+    // 淡出結束後切換畫面
+    setTimeout(() => {
+      creditsEl.classList.remove("show", "hide");
+      creditsEl.style.display = "none";
+
+      finalEl.style.display = "block";
+      finalEl.classList.add("show");
+      finalEl.setAttribute("aria-hidden", "false");
+      creditsEl.setAttribute("aria-hidden", "true");
+
+      if (store) store.setItem(END_CREDITS_KEY, "1");
+      window.__END_CREDITS_TIMER__ = null;
+    }, 380);
+  }, 2500);
 }
 
 function hideEndOverlay() {
@@ -677,7 +743,7 @@ function continueGame() {
   dialogOpen = !!data.dialogOpen;
   // DOM 先關掉，等場景 create() 載入完成再決定要不要打開
   dialogEl.classList.remove("show");
-const firedMap = data.whiteGardenFired || {};
+  const firedMap = data.whiteGardenFired || {};
   for (const cfg of WHITE_GARDEN_TRIGGERS) {
     cfg.fired = !!firedMap[cfg.id];
   }
@@ -694,8 +760,6 @@ const firedMap = data.whiteGardenFired || {};
 btnStart?.addEventListener("click", startNewGame);
 btnContinue?.addEventListener("click", () => { if (!btnContinue.disabled) continueGame(); });
 btnSettings?.addEventListener("click", openSettings);
-
-
 
 // 角色頭像對應（你先只有褚冥漾也OK）
 const PORTRAITS = {
@@ -718,9 +782,15 @@ const PORTRAITS = {
     close:  "assets/img/bing_portrait_close.png",
     closea:  "assets/img/bing_portrait_closea.png",
   },
-  "冰炎 ": {
+  "冰炎.": {
     normal: "assets/img/bing_portrait1.png",
     angry:  "assets/img/bing_portrait_angry1.png",
+  },
+  "（假）冰炎": {
+    nor: "assets/img/bing_portrait1.png",
+    ang:  "assets/img/bing_portrait_angry1.png",
+    dar:  "assets/img/bing_portrait_dark1.png",
+    dar1:  "assets/img/bing_portrait_dark2.png",
   },
   "安地爾": {
     normal: "assets/img/coffee_portrait.png",
@@ -789,7 +859,7 @@ const TILEMAPS = {
 
 const STAGE_SPAWN = {
   blackhall: {
-    bed: { x: 144, y: 80 },
+    bed: { x: 130, y: 80 },
     default: { x: 80, y: 144 }
   },
   white_garden: {
@@ -832,12 +902,12 @@ const DIALOGS = {
     { name: "  ", text: "而當他看清來者時，詫異被不可置信給取代。" },
     { name: "  ", text: "沒入體內的兇器是他再熟悉不能的峰云凋戈。順著槍身，他看到那白皙蔥指有著微不可察的顫抖。" },
     { name: "褚冥漾", text: "學長......為什麼......", face: "blood" },
-    { name: "冰炎 ", text: "閉嘴！褚冥漾！", face: "angry" },
+    { name: "冰炎.", text: "閉嘴！褚冥漾！", face: "angry" },
     { name: "  ", text: "學長打斷他的口氣有著憤恨、失望。紅瞳中倒映著褚冥漾蒼白的面容，可卻被憎恨充盈。" },
-    { name: "冰炎 ", text: "你——背叛了我們——", face: "angry" },
+    { name: "冰炎.", text: "你——背叛了我們——", face: "angry" },
     { name: "  ", text: "褚冥漾想要辯解，但一啟唇就是一口腥甜。絳紅順著嘴角流下，褚冥漾雙腿已快無力。" },
     { name: "褚冥漾", text: "我......沒有......我......沒......背、背叛......", face: "blood" },
-    { name: "冰炎 ", text: "住口！", face: "angry" },
+    { name: "冰炎.", text: "住口！", face: "angry" },
     { name: "  ", text: "不願看到曾經的學弟那乞求的目光，冰炎眼一閉。" },
     { name: "  ", text: "他還是顧及褚冥漾之間的情份；他能做的就是減少對方的痛苦，送對方儘早投胎。" },
     { name: "  ", text: "噗嗤！", action: [
@@ -865,8 +935,8 @@ const DIALOGS = {
 
   wake_blackhall: [
     { name: "  ", text: "（……）",  action: [
-    { type: "sitUp", actor: "chu", ms: 450 },
     { type: "flashWhite", peak: 0.8, msIn: 60, msOut: 220 },
+    { type: "sitUp", actor: "chu", ms: 450 },
     { type: "fadeBlack", to: 0, ms: 450 }
   ]},
     { name: "褚冥漾", text: "哈！", face: "shock" },
@@ -1081,16 +1151,38 @@ const DIALOGS = {
       DIALOGS.coffee_branch = [
         { name: "  ", text: "(......)" },
         { name: "  ", text: "一陣白光閃過，耳邊被帶離白園，來到一個詭異又荒謬......不，一個看起來意外的正常的地方。", action: { type: "show", actor: "coffee" } },
-        { name: "安地爾", text: "歡迎來到我的休假地點。", action: { type: "toPlayer", actor: "coffee", enterFrom: "left", enterDist: 260, side: "right", gapY: 1, ms: 150 } },
+        { name: "安地爾", text: "歡迎來到我的休假地點。", action: { type: "toPlayer", actor: "coffee", enterFrom: "left", enterDist: 260, side: "right", gapY: 1, ms: 250 } },
         { name: "褚冥漾", text: "......咖啡廳？", face: "really" },
         { name: "  ", text: "不是褚冥漾想像中的黑色空間還是什麼詭異地方之類的，這裡的裝潢溫馨，空氣中甚至能聞到淡淡的咖啡香味。" },
-        { name: "  ", text: "安地爾臉上仍是那副輕鬆的笑容，他緩步走到畫面中唯一的桌椅旁，卻沒有坐下。", action: { type: "runTo", actor: "coffee", x: 325, y: 175, ms: 900 } },
+        { name: "  ", text: "安地爾臉上仍是那副輕鬆的笑容，他緩步走到畫面中唯一的桌椅旁，卻沒有坐下。", action: { type: "runTo", actor: "coffee", x: 325, y: 175, ms: 1000 } },
         { name: "  ", text: "也許是因為根本坐不下。" },
         { name: "褚冥漾", text: "『你是在賣你自己嗎？』" },
         { name: "安地爾", text: "你好像在想一些很失禮的事情呢。" },
         { name: "褚冥漾", text: "。", face: "uh" },
-        { name: "  ", text: "安地爾似乎絲毫不在意褚冥漾擺出的態度，" },
-
+        { name: "  ", text: "安地爾似乎絲毫不在意褚冥漾擺出的態度，自顧自地繼續說道" },
+        { name: "安地爾", text: "你還沒意識到嗎？你正在作夢。" },
+        { name: "  ", text: "安地爾的話彷彿瞬間打通褚冥漾的任督二脈，腦海霎時閃過那些一開始就覺得奇怪的部分。" },
+        { name: "  ", text: "朋友們齊齊說些奇怪的話、完全不聽自己說話、奇怪的選項......" },
+        { name: "褚冥漾", text: "你在我的夢裡做什麼？！", face: "uh" },
+        { name: "安地爾", text: "只是來找你敘敘舊而已。" },
+        { name: "安地爾", text: "順帶一提，這裡已經不是你的夢了。" },
+        { name: "褚冥漾", text: "『不要隨便帶人去奇怪的地方！』", face: "wtf" },
+        { name: "褚冥漾", text: "你到底想幹嗎？", face: "deny" },
+        { name: "安地爾", text: "別緊張，我都說我現在是休假狀態。" },
+        { name: "  ", text: "看著褚冥漾明顯不信的表情，安地爾也只是輕笑一聲，沒有辯駁。" },
+        { name: "安地爾", text: "想跟你閒談一小會也還真是不容易，這麼快就有人干涉了。" },
+        { name: "安地爾", text: "我們來做個交易吧。" },
+        { name: "褚冥漾", text: "我不跟咖啡杯做交易。", face: "uh" },
+        { name: "  ", text: "安地爾無視了褚冥漾帶刺的話語，朝褚冥漾走去，以迅雷不及掩耳的速度拔了一搓他的毛髮。", action: [
+        { type: "runTo", actor: "coffee", x: 45, y: 175, ms: 500 },
+        { type: "move", actor: "chu", dx: -10, dy: 0, ms: 250 },
+       ]},
+        { name: "褚冥漾", text: "？？！！", face: "wtf" },
+        { name: "安地爾", text: "報酬我收到了，你想離開就離開吧。", action: [
+        { type: "runTo", actor: "coffee", x: 223, y: 173, ms: 900 },
+        { type: "runTo", actor: "coffee", x: 223, y: -100, ms: 1200 },
+       ], auto: true },
+        { name: "不那麼快樂的Happy End", text: "妖師的頭髮-1，但逃脫了夢境。" },
       ];
     }
     if (!DIALOGS.ending_B) {
@@ -1110,7 +1202,7 @@ const DIALOGS = {
   ] },
         { name: "褚冥漾", text: "你是不是對自己現在長什麼樣不太清楚。", face: "deny" },
         { name: "  ", text: "安地爾沒有再試圖逼迫褚冥漾，反而只是輕鬆的聳了聳肩。" },
-        { name: "安地爾", text: "別緊張，我都說我現在是休假狀態了。" },
+        { name: "安地爾", text: "別緊張，我都說我現在是休假狀態。" },
         { name: "  ", text: "說完，安地爾竟然就這麼離開了，讓人完全摸不清楚頭腦。", action: { type: "runTo", actor: "coffee", x: 1000, y: 205, ms: 450 } },
         { name: "褚冥漾", text: "......這傢伙到底來幹嘛的？", face: "uh" },
         { name: "千冬歲", text: "褚冥漾你還不認罪嗎？", action: { type: "jump", actor: "qian" } },
@@ -1122,18 +1214,16 @@ const DIALOGS = {
       { type: "face", actor: "twins2", dir: "right" },
       { type: "face", actor: "twins1", dir: "left" }
       ] },
-        { name: "？？？", text: "褚冥漾！！！", action: [
-          { type: "toPlayer", actor: "bing", enterFrom: "left", side: "left", offsetX: 600, ms: 250 },
-          { type: "show", actor: "bing" },
-       ] },
+        { name: "？？？", text: "褚冥漾！！！", action: { type: "toPlayer", actor: "bing", enterFrom: "left", side: "left", offsetX: 600, ms: 250 }},
         { name: "褚冥漾", text: "怎麼還有啊！！！", face: "wtf" },
         { name: "  ", text: "來人褚冥漾再熟悉不過，一雙紅色的眼眸穿過人群直直瞪向他，眼裡燃燒的怒火像是快把他吞噬。", action: [
+      { type: "show", actor: "bing" },
       { type: "runTo", actor: "angel", x: 435, y: 255, ms: 450 },
       { type: "runTo", actor: "ran", x: 415, y: 235, ms: 450 },
       { type: "runTo", actor: "moon", x: 380, y: 235, ms: 450 },
       { type: "runTo", actor: "bing", x: 440, y: 205, ms: 450 },
     ] },
-        { name: "冰炎 ", text: "你——背叛了我們——", face: "angry" },
+        { name: "冰炎.", text: "你——背叛了我們——", face: "angry" },
         { name: "褚冥漾", text: "學長，怎麼你也腦子不正常了！", face: "nolove" },
         { name: "褚冥漾", text: "不對，怎麼感覺這個對話似曾相似？", face: "really" },
         { name: "？？？", text: "那是因為你在作夢。", action: { type: "show", actor: "bingt" } },
@@ -1142,7 +1232,7 @@ const DIALOGS = {
       { type: "toPlayer", actor: "bingt", enterFrom: "right", side: "right", offsetX: 32, ms: 250 },
        ] },
         { name: "褚冥漾", text: "咦？！！", face: "shock", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
-        { name: "  ", text: "褚冥漾猛地回頭，身後的那人是如此的熟悉，銀色的長髮在腦後束成俐落的馬尾，紅色的眼眸微微瞇起，正似笑非笑的盯著褚冥漾。", action: { type: "face", actor: "chu", dir: "left" } },
+        { name: "  ", text: "褚冥漾猛地回頭，身後的那人是如此的熟悉，銀色的長髮在腦後束成俐落的馬尾，紅色的眼眸微微瞇起，正似笑非笑的盯著褚冥漾。", action: { type: "face", actor: "chu", dir: "right" } },
         { name: "褚冥漾", text: "？？？", face: "shock", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
@@ -1151,18 +1241,93 @@ const DIALOGS = {
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
-        { name: "冰炎", text: "......你在幹嘛？", action: { type: "emote", actor: "qian", key: "angry", ms: 600, dx: 10, dy: 15, scale: 0.4 }, face: "dark" },
-        { name: "褚冥漾", text: "在確認哪個是學長。"},
+        { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" } },
+        { name: "冰炎", text: "......你在幹嘛？", action: { type: "emote", actor: "bingt", key: "angry", ms: 600, dx: 10, dy: 15, scale: 0.4 }, face: "dark" },
+        { name: "褚冥漾", text: "在確認哪個是真的學長。"},
         { name: "  ", text: "冰炎的嘴角抽搐了一下，閉上眼揉了揉眉心，額角青筋直跳捏緊拳頭看向褚冥漾。" },
-        { name: "冰炎", text: "需要我幫你回憶一下嗎？", face: "close" },
-
+        { name: "冰炎", text: "需要我幫你回憶一下嗎？", face: "closea", action: { type: "move", actor: "bingt", dx: -10, dy: 0, ms: 300 } },
+        { name: "褚冥漾", text: "不用了謝謝。", action: { type: "move", actor: "chu", dx: -8, dy: 0, ms: 300 }, face: "nolove" },
+        { name: "（假）冰炎", text: "褚。", face: "ang" },
+        { name: "  ", text: "褚冥漾回過頭，看向頭髮顏色明顯錯邊的假學長", action: { type: "face", actor: "chu", dir: "left" } },
+        { name: "  ", text: "他正用一種......彷彿看到學弟找了個拙劣替代品的表情看著褚冥漾。"},
+        { name: "（假）冰炎", text: "", face: "dar" },
+        { name: "  ", text: "並且準備將他分屍丟大海。"},
+        { name: "冰炎", text: "給我閉腦！！", face: "dark", action: [
+        { type: "move", actor: "bingt", dx: -10, dy: 0, ms: 300 },
+        { type: "sfx", key: "hit", volume: 0.5 },
+        { type: "cameraShake", ms: 100, intensity: 0.05 },
+        { type: "move", actor: "bingt", dx: 10, dy: 0, ms: 300 }
+       ]},
+        { name: "褚冥漾", text: "『好熟悉的感覺......』", face: "cry", action: { type: "face", actor: "chu", dir: "right" } },
+        { name: "（假）冰炎", text: "褚！你不要再墮落了！快離開那個仿冒品！", face: "dar1", action: { type: "move", actor: "bing", dx: 10, dy: 0, ms: 300 } },
+        { name: "  ", text: "對於（假）冰炎的言論，冰炎沒什麼表情，只是又瞪了褚冥漾一眼。" },
+        { name: "冰炎", text: "你還沒意識到你在作夢嗎？需要我再巴你一下嗎？"},
+        { name: "  ", text: "冰炎的話彷彿瞬間打通褚冥漾的任督二脈，腦海霎時閃過那些一開始就覺得奇怪的部分。" },
+        { name: "  ", text: "朋友們齊齊說些奇怪的話、完全不聽自己說話、奇怪的選項、還有此刻，除了冰炎與他之外的｢所有人」都僵立在原地不再動彈、說話。" },
+        { name: "  ", text: "夢境，開始崩解。", action: [
+        { type: "hide", actor: "qian" },
+        { type: "hide", actor: "bing" },
+        { type: "hide", actor: "bingt" },
+        { type: "hide", actor: "cat" },
+        { type: "hide", actor: "ryan" },
+        { type: "hide", actor: "moon" },
+        { type: "hide", actor: "five" },
+        { type: "hide", actor: "angel" },
+        { type: "hide", actor: "ran" },
+        { type: "hide", actor: "twins2" },
+        { type: "hide", actor: "bigbro" },
+        { type: "hide", actor: "twins1" },
+        { type: "sfx", key: "breaking", volume: 0.5 },
+        { type: "cameraShake", ms: 180, intensity: 0.05 },
+        { type: "fadeBlack", to: 1, ms: 650 },
+        { type: "gotoStage", stage: "blackhall", spawn: "bed" },
+        { type: "face", actor: "bingt", dir: "right" },
+        { type: "face", actor: "chu", dir: "left" },
+        { type: "lay", actor: "chu", ms: 1, angle: 90 },
+        { type: "runTo", actor: "bingt", x: 101, y: 46, ms: 250 },
+        { type: "runTo", actor: "cat", x: 84, y: 68, ms: 250 },
+        { type: "runTo", actor: "qian", x: 81, y: 95, ms: 250 },
+        { type: "runTo", actor: "ryan", x: 101, y: 114, ms: 250 },
+        { type: "runTo", actor: "five", x: 140, y: 47, ms: 250 },
+        { type: "runTo", actor: "moon", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "ran", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "angel", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "twins2", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "bigbro", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "twins1", x: 900, y: 900, ms: 250 },
+        { type: "fadeBlack", to: 0, ms: 650 },
+        { type: "show", actor: "bingt" },
+        { type: "show", actor: "qian" },
+        { type: "show", actor: "cat" },
+        { type: "show", actor: "ryan" },
+        { type: "show", actor: "five" }
+       ]},
+           { name: "  ", text: "（……）",  action: [
+        { type: "flashWhite", peak: 0.8, msIn: 60, msOut: 220 },
+        { type: "fadeBlack", to: 0, ms: 450 }
+       ], auto: true},
+        { name: "褚冥漾", text: "哈！", face: "shock", action: [
+        { type: "sitUp", actor: "chu", ms: 450 },
+        { type: "fadeBlack", to: 0, ms: 650 }
+       ]},
+        { name: "冰炎", text: "清醒了嗎？"},
+        { name: "米可蕥", text: "太好了漾漾！你終於醒了！",action: { type: "jump", actor: "cat" } },
+        { name: "千冬歲", text: "你已經昏睡三天了。" },
+        { name: "  ", text: "褚冥漾環顧四周，這是他在黑館的房間，他的朋友圍繞著床，面上滿是擔憂，包括看不見的萊恩。" },
+        { name: "褚冥漾", text: "『啊......萊恩還是看不見啊......』", face: "nolove" },
+        { name: "萊恩", text: "？怎麼了嗎？" },
+        { name: "褚冥漾", text: "沒什麼。" },
+        { name: "千冬歲", text: "是說......漾漾。" },
+        { name: "褚冥漾", text: "嗯？" },
+        { name: "千冬歲", text: "我在你心中的印象有這麼差嗎？夢裡的我也失智的太誇張了吧？" },
+        { name: "褚冥漾", text: "嗯？！", action: { type: "cameraShake", ms: 180, intensity: 0.08 }, face: "really" },
+        { name: "冰炎", text: "都看到了。" },
+        { name: "冰炎", text: "你夢裡的內容大家都看到了。" },
+        { name: "褚冥漾", text: "欸！！！！！！！", action: { type: "cameraShake", ms: 230, intensity: 0.1 }, face: "shock" },
+        { name: "  ", text: "最終，這件事以褚冥漾社死結束了。" },
+        { name: "True End", text: "你協助褚冥漾打破次元壁，沒有付出代價就回到現實。" },
       ];
     }
-
-//, action: [
-//      { type: "move", actor: "bing", dx: 10, dy: 0, ms: 200 },
-//      { type: "sfx", key: "hit", volume: 0.5 },
-//       ]
 
     const lines = DIALOGS?.white_garden;
     if (!Array.isArray(lines)) return;
@@ -2429,7 +2594,7 @@ if (action.type === "emote") {
 }
 
 if (action.type === "sfx") {
-  const key = action.key ?? "hit";
+  const key = action.key ?? "hit" | "breaking";
   const volume = action.volume ?? 1;
   const rate = action.rate ?? 1;
   const detune = action.detune ?? 0;
@@ -2682,6 +2847,7 @@ preload() {
   // 你如果之後有冰炎/第三人，也可以加
   // this.load.image("bing_front", "assets/bing_front.png");
   this.load.audio("hit", "assets/audio/hit.mp3");
+  this.load.audio("breaking", "assets/audio/breaking.mp3");
 
   for (const cfg of Object.values(TILEMAPS)) {
     this.load.tilemapTiledJSON(cfg.mapKey, cfg.mapFile);
@@ -2714,10 +2880,6 @@ clearCurrentMap() {
 
 loadStageMap(stageKey) {
   const cfg = TILEMAPS[stageKey];
-  if (!cfg) {
-    console.warn("[loadStageMap] unknown stage:", stageKey);
-    return;
-  }
   this.clearCurrentMap();
   const map = this.make.tilemap({ key: cfg.mapKey });
   this._tilemap = map;
@@ -2726,10 +2888,6 @@ loadStageMap(stageKey) {
   const phaserTilesets = [];
   for (const ts of (cfg.tilesets || [])) {
     const tset = map.addTilesetImage(ts.name, ts.imageKey);
-    if (!tset) {
-      console.warn("[tilemap] addTilesetImage failed:", ts.name, ts.imageKey);
-      continue;
-    }
     phaserTilesets.push(tset);
   }
 
@@ -3034,12 +3192,6 @@ this.applyStageTriggers = (stage) => {
     const broken = !this.whiteTriggers?.length || !this.whiteTriggers[0]?.zone?.body;
     if (broken) this.buildWhiteGardenTriggers();     // ✅ 被清掉就重建
     this.enableWhiteGardenTriggers(true);
-
-  console.log("[WG enable]", stage,
-    this.whiteTriggers?.length,
-    this.whiteTriggers?.[0]?.zone?.active,
-    this.whiteTriggers?.[0]?.zone?.body?.enable
-  );
   } else {
     this.enableWhiteGardenTriggers(false);
   }
