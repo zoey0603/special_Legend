@@ -295,6 +295,16 @@ function ensureGameState() {
 }
 ensureGameState();
 
+// Mobile/Mouse：點擊 END 畫面也可重新開始（等同按 A）
+if (endOverlayEl) {
+  endOverlayEl.addEventListener("pointerdown", (e) => {
+    // 避免點到 END 上的內容時觸發兩次
+    e.preventDefault();
+    const gs = ensureGameState();
+    if (gs.phase === "ended" || window.gameFinished === true) startNewGame();
+  }, { passive: false });
+}
+
 function showEndOverlay() {
   const gs = ensureGameState();
   endOverlayEl?.classList.add("show");
