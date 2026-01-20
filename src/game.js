@@ -7,6 +7,10 @@ const menuEl = document.getElementById("menu");
 const btnStart = document.getElementById("btnStart");
 const btnContinue = document.getElementById("btnContinue");
 const btnSettings = document.getElementById("btnSettings");
+// btnBack：返回遊戲（主選單最下方）
+const btnBack = document.getElementById("btnBack");
+// btnSettingsBack：返回主選單（設定面板內）
+const btnSettingsBack = document.getElementById("btnSettingsBack");
 const settingsPanel = document.getElementById("settingsPanel");
 const musicVolEl = document.getElementById("musicVol");
 const sfxVolEl = document.getElementById("sfxVol");
@@ -370,6 +374,7 @@ function getMenuButtons() {
     menuEl.querySelector("#btnStart"),
     menuEl.querySelector("#btnContinue"),
     menuEl.querySelector("#btnSettings"),
+    menuEl.querySelector("#btnBack"),
   ].filter(Boolean);
 }
 // ✅ 允許選到 d（disableContinue 沒存檔也能被選到，只是 Enter 不會動作）
@@ -389,9 +394,21 @@ function refreshContinueButton() {
   btnContinue.disabled = !hasSave;
 }
 
+function refreshBackButton() {
+  if (!btnBack) return;
+  const gs = ensureGameState();
+  const hasScene = !!window.__SCENE__;
+  const canBack = hasScene && gs.finished !== true;
+
+  // 初次進入（還沒進遊戲）就不要顯示「返回遊戲」
+  btnBack.style.display = hasScene ? "block" : "none";
+  btnBack.disabled = !canBack;
+}
+
 function showMenu() {
   const gs = ensureGameState();
   refreshContinueButton();
+  refreshBackButton();
 
   menuEl.classList.add("show");
   settingsPanel.classList.remove("show");
@@ -607,6 +624,14 @@ function confirmMenuSelection() {
   }
 
   if (menuIndex === 2) openSettings();
+
+  if (menuIndex === 3) {
+    if (!btnBack || btnBack.disabled) {
+      denyButton(currentBtn);
+      return;
+    }
+    btnBack.click();
+  }
 }
 
 // ===== Keyboard =====
@@ -754,6 +779,17 @@ function continueGame() {
 btnStart?.addEventListener("click", startNewGame);
 btnContinue?.addEventListener("click", () => { if (!btnContinue.disabled) continueGame(); });
 btnSettings?.addEventListener("click", openSettings);
+// 設定面板內：返回主選單（只關設定，不回到遊戲）
+btnSettingsBack?.addEventListener("click", closeSettings);
+btnBack?.addEventListener("click", () => {
+  // 從主選單返回遊戲：只在「已經進入遊戲」時才允許
+  const gs = ensureGameState();
+  if (!window.__SCENE__ || gs.finished === true) {
+    denyButton(btnBack);
+    return;
+  }
+  hideMenu();
+});
 
 // 角色頭像對應（你先只有褚冥漾也OK）
 const PORTRAITS = {
@@ -824,54 +860,6 @@ const COMMON_TILESETS = [
   { name: "咖啡杯",       imageKey: "ts_咖啡杯", imageFile: "assets/maps/tilesets/咖啡杯.png" },
   { name: "相框",        imageKey: "ts_相框", imageFile: "assets/maps/tilesets/相框.png" },
 ];
-
-const TILEMAPS = {
-  prologue_fire: {
-    mapKey: "map_prologue_fire",
-    mapFile: "assets/maps/prologue_fire.tmj",
-    tilesets: COMMON_TILESETS,
-    collisionLayerNames: ["Collision"],   // ✅ 改成 TMJ 真的有的 layer 名
-  },
-  white_garden: {
-    mapKey: "map_white_garden",
-    mapFile: "assets/maps/white_garden.tmj",
-    tilesets: COMMON_TILESETS,
-    collisionLayerNames: ["Collision"],
-  },
-  blackhall: {
-    mapKey: "map_blackhall",
-    mapFile: "assets/maps/blackhall.tmj",
-    tilesets: COMMON_TILESETS,
-  },
-  coffee: {
-    mapKey: "map_coffee",
-    mapFile: "assets/maps/coffee.tmj",
-    collisionLayerNames: ["Collision"],
-    tilesets: COMMON_TILESETS,
-  },
-};
-
-const STAGE_SPAWN = {
-  blackhall: {
-    bed: { x: 130, y: 80 },
-    default: { x: 80, y: 144 }
-  },
-  white_garden: {
-    entry: { x: 120, y: 195 },     // 例：入口
-    pond:  { x: 380, y: 140 },     // 例：池邊
-    default: { x: 240, y: 200 }
-  },
-  coffee: {
-    default: { x: 20, y: 178 }, // ✅ 對齊 tmj 的 player_spawn
-  },
-};
-
-const WHITE_GARDEN_TRIGGERS = [
-  // 你可以依地圖調整座標/大小
-  { id: "white_garden", x: 560, y: 190, w: 20, h: 75, once: true, fired: false },
-  // { id: "pond_event", x: 340, y: 120, w: 70, h: 50, once: false, fired: false },
-];
-
 
 const TILEMAPS = {
   prologue_fire: {
@@ -1227,7 +1215,7 @@ const DIALOGS = {
         { name: "安地爾", text: "報酬我收到了，你想離開就離開吧。", action: [
         { type: "runTo", actor: "coffee", x: 223, y: 173, ms: 900 },
         { type: "runTo", actor: "coffee", x: 223, y: -100, ms: 1200 },
-       ], auto: true },
+       ] },
         { name: "不那麼快樂的Happy End", text: "妖師的頭髮-1，但逃脫了夢境。" },
       ];
     }
@@ -3267,9 +3255,184 @@ this.applyStageTriggers = (stage) => {
 };
 
   // ============ 輸入鍵 ============
+  // 你的鍵位（PC）：
+  // - ↑↓←→：移動
+  // - Enter / Space：確認 / 繼續劇情
+  // - Esc：返回 / 關閉
+  // - 設定：←→ 調整音量
+  // - 遊戲中：S 存檔、Q 開啟副選單、R 開主選單
+  //
+  // ✅ 手機需求：
+  // - 移動與繼續劇情「也能用 click/tap」
+  // - S/Q/R 保留鍵盤，並在手機顯示 S/Q/R 按鍵
+
+  // 方向鍵（保留原本）
   this.cursors = this.input.keyboard.createCursorKeys();
+
+  // 確認/繼續（保留原本）
   this.keyEnter = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
   this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+  // click-to-move 狀態（作為「替代操作」，不取代方向鍵）
+  this._clickMove = { active: false, tx: 0, ty: 0 };
+
+  // 手機虛擬按鍵狀態
+  this._vkeys = { up: false, down: false, left: false, right: false };
+
+  const isTouchDevice = () => {
+    try {
+      return ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+    } catch (_e) {
+      return false;
+    }
+  };
+
+  const stop = (e) => {
+    try { e.preventDefault(); } catch (_e) {}
+    try { e.stopPropagation(); } catch (_e) {}
+  };
+
+  // 點一下：
+  // - 若對話開著 -> 下一句
+  // - 否則 -> 設定 click move 目標（世界座標）
+  this.input.on("pointerdown", (pointer) => {
+    // 主選單/副選單開著就不吃
+    if (menuEl.classList.contains("show") || ingameMenuEl?.classList.contains("show")) return;
+
+    // 有選項彈窗時，讓按鈕自己處理（避免點背景跳過）
+    if (typeof isChoiceOpen === "function" && isChoiceOpen()) return;
+
+    if (dialogOpen) {
+      nextDialog();
+      return;
+    }
+
+    // 遊戲結束就不移動
+    if (window.gameFinished === true) return;
+
+    this._clickMove.active = true;
+    this._clickMove.tx = pointer.worldX;
+    this._clickMove.ty = pointer.worldY;
+  });
+
+  // 點對話框本身也能下一句（對話框是 DOM，不一定點得到 canvas）
+  if (!dialogEl.__clickNextBound) {
+    dialogEl.addEventListener("click", () => {
+      if (!dialogOpen) return;
+      if (typeof isChoiceOpen === "function" && isChoiceOpen()) return;
+      nextDialog();
+    });
+    dialogEl.__clickNextBound = true;
+  }
+
+  // ===== 手機：建立虛擬按鍵（方向 + S/Q/R） =====
+  if (isTouchDevice() && !window.__MZ_MOBILE_UI__) {
+    window.__MZ_MOBILE_UI__ = true;
+
+    // 注入簡單 CSS（避免你還要改 CSS 檔）
+    const style = document.createElement("style");
+    style.textContent = `
+      .mz-mobile-ui{position:fixed;inset:0;pointer-events:none;z-index:9999;font-family:system-ui, -apple-system, Segoe UI, Roboto, Noto Sans TC, sans-serif;}
+      .mz-pad{position:absolute;left:12px;bottom:12px;width:168px;height:168px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:8px;pointer-events:auto;touch-action:none;}
+      .mz-btn{border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;}
+      .mz-btn:active{transform:scale(.98);background:rgba(0,0,0,.5);}
+      .mz-actions{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;touch-action:none;}
+      .mz-actions .mz-btn{width:72px;height:56px;font-size:16px;letter-spacing:.5px;}
+      .mz-actions .mz-btn.small{height:46px;font-size:15px;}
+      .mz-actions .mz-btn.ghost{background:rgba(0,0,0,.25);}
+    `;
+    document.head.appendChild(style);
+
+    // 容器
+    const ui = document.createElement("div");
+    ui.className = "mz-mobile-ui";
+
+    // 方向鍵
+    const pad = document.createElement("div");
+    pad.className = "mz-pad";
+
+    const mk = (label, cls) => {
+      const b = document.createElement("div");
+      b.className = `mz-btn ${cls||""}`;
+      b.textContent = label;
+      return b;
+    };
+    const empty = () => {
+      const e = document.createElement("div");
+      e.style.pointerEvents = "none";
+      return e;
+    };
+
+    const bUp = mk("↑");
+    const bLeft = mk("←");
+    const bRight = mk("→");
+    const bDown = mk("↓");
+
+    pad.appendChild(empty());
+    pad.appendChild(bUp);
+    pad.appendChild(empty());
+    pad.appendChild(bLeft);
+    pad.appendChild(empty());
+    pad.appendChild(bRight);
+    pad.appendChild(empty());
+    pad.appendChild(bDown);
+    pad.appendChild(empty());
+
+    // 綁定按住移動
+    const bindHold = (el, key) => {
+      const down = (ev) => { stop(ev); this._vkeys[key] = true; this._clickMove.active = false; };
+      const up   = (ev) => { stop(ev); this._vkeys[key] = false; };
+      el.addEventListener("pointerdown", down);
+      el.addEventListener("pointerup", up);
+      el.addEventListener("pointercancel", up);
+      el.addEventListener("pointerleave", up);
+    };
+    bindHold(bUp, "up");
+    bindHold(bDown, "down");
+    bindHold(bLeft, "left");
+    bindHold(bRight, "right");
+
+    // S / Q / R
+    const actions = document.createElement("div");
+    actions.className = "mz-actions";
+    const bS = mk("S\n存檔");
+    const bQ = mk("Q\n副選單", "ghost small");
+    const bR = mk("R\n主選單", "ghost small");
+    bS.style.whiteSpace = "pre-line";
+    bQ.style.whiteSpace = "pre-line";
+    bR.style.whiteSpace = "pre-line";
+
+    const clickBtn = (el, fn) => {
+      el.addEventListener("pointerdown", (ev) => { stop(ev); fn?.(); });
+    };
+    clickBtn(bS, () => {
+      const gs = ensureGameState();
+      // 跟你原本熱鍵一致：playing 且沒有開選單
+      if (gs.phase === "playing" && !menuEl.classList.contains("show") && !ingameMenuEl.classList.contains("show")) {
+        saveGame();
+        showToast?.("已存檔");
+      }
+    });
+    clickBtn(bQ, () => {
+      if (!ingameMenuEl) return;
+      if (ingameMenuEl.classList.contains("show")) hideIngameMenu();
+      else showIngameMenu();
+    });
+    clickBtn(bR, () => {
+      const gs = ensureGameState();
+      if (gs.phase === "ended") return;
+      if (menuEl.classList.contains("show")) hideMenu();
+      else showMenu();
+    });
+
+    actions.appendChild(bS);
+    actions.appendChild(bQ);
+    actions.appendChild(bR);
+
+    ui.appendChild(pad);
+    ui.appendChild(actions);
+    document.body.appendChild(ui);
+  }
 
   // ============ 相機 ============
   this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
@@ -3363,13 +3526,50 @@ update() {
   const speed = 120;
   let vx = 0, vy = 0;
 
-  if (this.cursors.left.isDown) vx = -speed;
-  else if (this.cursors.right.isDown) vx = speed;
+  // ===== 方向鍵 / 手機虛擬方向鍵（優先） =====
+  const leftDown  = !!this.cursors?.left?.isDown  || !!this._vkeys?.left;
+  const rightDown = !!this.cursors?.right?.isDown || !!this._vkeys?.right;
+  const upDown    = !!this.cursors?.up?.isDown    || !!this._vkeys?.up;
+  const downDown  = !!this.cursors?.down?.isDown  || !!this._vkeys?.down;
 
-  if (this.cursors.up.isDown) vy = -speed;
-  else if (this.cursors.down.isDown) vy = speed;
+  if (leftDown || rightDown || upDown || downDown) {
+    // 只要玩家有在按方向，就中止 click move
+    if (this._clickMove) this._clickMove.active = false;
 
-  // ✅ 新增：左右鍵改面向（用 flipX 鏡像）
+    if (leftDown) vx = -speed;
+    else if (rightDown) vx = speed;
+    else vx = 0;
+
+    if (upDown) vy = -speed;
+    else if (downDown) vy = speed;
+    else vy = 0;
+
+    // 4 向優先：同時按斜向時，保留你原本的習慣（這裡允許斜向；如你要鎖 4 向可再改）
+  } else {
+    // ===== Click/Tap to move（沒按方向時才生效） =====
+    if (this._clickMove?.active) {
+      const dx = this._clickMove.tx - this.player.x;
+      const dy = this._clickMove.ty - this.player.y;
+
+      // 到達目標就停
+      const eps = 6;
+      if (Math.abs(dx) <= eps && Math.abs(dy) <= eps) {
+        this._clickMove.active = false;
+        vx = 0; vy = 0;
+      } else {
+        // 4 向：哪個方向差距大就先走哪個
+        if (Math.abs(dx) > Math.abs(dy)) {
+          vx = dx > 0 ? speed : -speed;
+          vy = 0;
+        } else {
+          vy = dy > 0 ? speed : -speed;
+          vx = 0;
+        }
+      }
+    }
+  }
+
+  // 面向（用 flipX 鏡像）
   if (vx < 0) {
     this.player.facing = "left";
     this.player.setFlipX(true);
@@ -3377,7 +3577,6 @@ update() {
     this.player.facing = "right";
     this.player.setFlipX(false);
   }
-  // vx==0（只走上下或停住）就保持上一個 facing，不動
 
   this.player.body.setVelocity(vx, vy);
 }
@@ -3410,6 +3609,3 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
-
-
-
