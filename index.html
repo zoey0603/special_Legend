@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Phaser MZ-Minimal</title>
 
   <link rel="stylesheet" href="./src/style.css" />
@@ -51,12 +52,13 @@ Enter/Space繼續
 
     <button id="btnStart">開始遊戲</button>
     <button id="btnContinue">繼續遊戲</button>
-
     <button id="btnSettings">條件設置</button>
     <div id="settingsPanel" class="settings">
       <label>音樂 <input id="musicVol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
       <label>音效 <input id="sfxVol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
-    </div>
+      <button id="btnSettingsBack" class="btn-settings-back">返回</button>
+  </div>
+    <button id="btnBack">返回遊戲</button>
 
     <div class="menu-hint">Esc 返回/關閉</div>
   </div>
