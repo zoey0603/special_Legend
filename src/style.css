@@ -504,3 +504,8 @@ html, body { margin:0; padding:0; background:#111; height:100%; }
 .warning-full{
   display: none;
 }
+
+.settings .btn-settings-back{
+  margin-top: 6px;
+  width: 100%;
+}
