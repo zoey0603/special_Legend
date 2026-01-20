@@ -1862,12 +1862,16 @@ function openCurrentDialog() {
   storyIndex = 0;
   dialogOpen = true;
   dialogEl.classList.add("show");
+  // 手機：對話開啟時可讓方向鍵消失
+  try { window.__MZ_UPDATE_MOBILE_PAD__?.(); } catch (_e) {}
   renderDialog();
 }
 
 function closeDialog() {
   dialogOpen = false;
   dialogEl.classList.remove("show");
+  // 手機：對話關閉時恢復方向鍵
+  try { window.__MZ_UPDATE_MOBILE_PAD__?.(); } catch (_e) {}
   // ✅ 以防萬一：對話關閉時也把選項收起來
   closeChoicePopup();
 }
@@ -3326,6 +3330,18 @@ this.applyStageTriggers = (stage) => {
   }
 
   // ===== 手機：建立虛擬按鍵（方向 + S/Q/R） =====
+  // 需求：
+  // - Q/R/S 移到右上角（避免被對話框擋）
+  // - 對話框開啟時，方向鍵可消失（保留 Q/R/S）
+  const updateMobilePadVisibility = () => {
+    const ui = document.querySelector('.mz-mobile-ui');
+    if (!ui) return;
+    ui.classList.toggle('mz-dialog-open', !!dialogOpen);
+  };
+
+  // 讓其他函式（openCurrentDialog/closeDialog/讀檔）也能同步手機方向鍵顯示
+  window.__MZ_UPDATE_MOBILE_PAD__ = updateMobilePadVisibility;
+
   if (isTouchDevice() && !window.__MZ_MOBILE_UI__) {
     window.__MZ_MOBILE_UI__ = true;
 
@@ -3334,9 +3350,11 @@ this.applyStageTriggers = (stage) => {
     style.textContent = `
       .mz-mobile-ui{position:fixed;inset:0;pointer-events:none;z-index:9999;font-family:system-ui, -apple-system, Segoe UI, Roboto, Noto Sans TC, sans-serif;}
       .mz-pad{position:absolute;left:12px;bottom:12px;width:168px;height:168px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:8px;pointer-events:auto;touch-action:none;}
+      .mz-mobile-ui.mz-dialog-open .mz-pad{display:none;}
       .mz-btn{border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font-weight:700;font-size:18px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;}
       .mz-btn:active{transform:scale(.98);background:rgba(0,0,0,.5);}
-      .mz-actions{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:10px;pointer-events:auto;touch-action:none;}
+      /* ✅ Q/R/S 移到右上角 */
+      .mz-actions{position:absolute;right:12px;top:12px;bottom:auto;display:flex;flex-direction:column;gap:10px;pointer-events:auto;touch-action:none;}
       .mz-actions .mz-btn{width:72px;height:56px;font-size:16px;letter-spacing:.5px;}
       .mz-actions .mz-btn.small{height:46px;font-size:15px;}
       .mz-actions .mz-btn.ghost{background:rgba(0,0,0,.25);}
@@ -3432,6 +3450,9 @@ this.applyStageTriggers = (stage) => {
     ui.appendChild(pad);
     ui.appendChild(actions);
     document.body.appendChild(ui);
+
+    // 初始同步一次
+    updateMobilePadVisibility();
   }
 
   // ============ 相機 ============
@@ -3497,6 +3518,8 @@ this.applyStageTriggers = (stage) => {
 
     dialogOpen = true;
     dialogEl.classList.add("show");
+    // 手機：讀檔若直接進對話，方向鍵要隱藏
+    try { window.__MZ_UPDATE_MOBILE_PAD__?.(); } catch (_e) {}
     renderDialog();
   }
 }
