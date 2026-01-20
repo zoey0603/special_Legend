@@ -1,9 +1,3 @@
-// Phaser 最小「像素探索 + 事件觸發 + 對話」範例
-// 特色：
-// - 方向鍵移動
-// - 走進發光區域 => 觸發劇情對話（Enter/Space 下一句）
-// - 不用任何圖片資產（先用幾何圖形），你之後再換成像素素材
-
 const dialogEl = document.getElementById("dialog");
 const dialogNameEl = document.getElementById("dialogName");
 const dialogTextEl = document.getElementById("dialogText");
@@ -878,6 +872,54 @@ const WHITE_GARDEN_TRIGGERS = [
   // { id: "pond_event", x: 340, y: 120, w: 70, h: 50, once: false, fired: false },
 ];
 
+
+const TILEMAPS = {
+  prologue_fire: {
+    mapKey: "map_prologue_fire",
+    mapFile: "assets/maps/prologue_fire.tmj",
+    tilesets: COMMON_TILESETS,
+    collisionLayerNames: ["Collision"],   // ✅ 改成 TMJ 真的有的 layer 名
+  },
+  white_garden: {
+    mapKey: "map_white_garden",
+    mapFile: "assets/maps/white_garden.tmj",
+    tilesets: COMMON_TILESETS,
+    collisionLayerNames: ["Collision"],
+  },
+  blackhall: {
+    mapKey: "map_blackhall",
+    mapFile: "assets/maps/blackhall.tmj",
+    tilesets: COMMON_TILESETS,
+  },
+  coffee: {
+    mapKey: "map_coffee",
+    mapFile: "assets/maps/coffee.tmj",
+    collisionLayerNames: ["Collision"],
+    tilesets: COMMON_TILESETS,
+  },
+};
+
+const STAGE_SPAWN = {
+  blackhall: {
+    bed: { x: 130, y: 80 },
+    default: { x: 80, y: 144 }
+  },
+  white_garden: {
+    entry: { x: 120, y: 195 },     // 例：入口
+    pond:  { x: 380, y: 140 },     // 例：池邊
+    default: { x: 240, y: 200 }
+  },
+  coffee: {
+    default: { x: 20, y: 178 }, // ✅ 對齊 tmj 的 player_spawn
+  },
+};
+
+const WHITE_GARDEN_TRIGGERS = [
+  // 你可以依地圖調整座標/大小
+  { id: "white_garden", x: 560, y: 190, w: 20, h: 75, once: true, fired: false },
+  // { id: "pond_event", x: 340, y: 120, w: 70, h: 50, once: false, fired: false },
+];
+
 const DIALOGS = {
   prologue_fire: [
     { name: "  ", text: "戰火肆虐，青青草地被大火蔓延染上枯涸色彩；空氣中瀰漫著殘缺屍體被火吻後、好似烤肉香同時卻又夾雜著腐臭味，令人作嘔。" },
@@ -954,7 +996,7 @@ const DIALOGS = {
 
   white_garden: [
     { name: "  ", text: "再一次睜眼，白園青草藍天、吹拂過臉上的微風中帶有著花草香。" },
-    { name: "  ", text: "褚冥漾看著附近的大樹，上頭空氣精靈開心的唱歌跳舞。" },
+    { name: "  ", text: "褚冥漾看著附近的大樹，上頭大氣精靈開心的唱歌跳舞。" },
     { name: "  ", text: "驀然間，一道聲音打破這樣的寧靜。" },
     { name: "？？？", text: "褚冥漾——你這個背叛者！" },
     { name: "  ", text: "回過身褚冥漾看向來者，只見對方手舉著一把它熟悉到不能再熟悉的長弓，指著他吶喊他是背叛者。", action: { type: "face", actor: "chu", dir: "left" } },
@@ -963,7 +1005,7 @@ const DIALOGS = {
       { type: "runTo", actor: "qian", x: 425, y: 196, ms: 450 }
  ]},
     { name: "褚冥漾", text: "......蛤？", face: "shock" },
-    { name: "褚冥漾", text: "『他說的那個夏碎哥是我知道的那個夏碎嗎？』", face: "really" },
+    { name: "褚冥漾", text: "『他說的那個夏碎哥是我知道的那個夏碎學長嗎？』", face: "really" },
     { name: "褚冥漾", text: "『應該......？是......吧？』", face: "really" },
     { name: "褚冥漾", text: "『我打夏碎？真的假的？』", face: "uh" },
     { name: "褚冥漾", text: "修但幾類，你先冷靜一點千冬歲......", face: "really" },
@@ -976,7 +1018,7 @@ const DIALOGS = {
     ]},
     { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！",action: { type: "jump", actor: "cat" } },
     { name: "褚冥漾", text: "喵喵？！", face: "shock" },
-    { name: "米可蕥", text: "沒想到你到現在竟然還不承認罪刑！",action: { type: "jump", actor: "cat" } },
+    { name: "米可蕥", text: "沒想到你到現在竟然還不承認罪行！",action: { type: "jump", actor: "cat" } },
     { name: "褚冥漾", text: "你們有給我辯解的機會嗎！！！", face: "wtf" },
     { name: "  ", text: "這時，米可蕥往旁邊移動了些，給來人讓出些位置。", action: [ 
       { type: "runTo", actor: "qian", x: 450, y: 165, ms: 500 }, 
@@ -990,7 +1032,7 @@ const DIALOGS = {
     { name: "褚冥漾", text: "屁啦！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "褚冥漾", text: "『槽點太多了不知道該從哪裡開始吐槽......』", face: "deny" },
     { name: "褚冥漾", text: "『這絕對是有人偷工減料吧......』", face: "wtf" },
-    { name: "萊恩？", text: "你不再是我萊恩·史凱爾的朋友了。" },
+    { name: "萊恩？", text: "你不再是我萊恩．史凱爾的朋友了。" },
     { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "really", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 455, y: 145, ms: 500 } },
     { name: "  ", text: "萊恩一臉失落（雖然其實根本看不到表情）的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 440, y: 167, ms: 600 } },
@@ -1019,7 +1061,7 @@ const DIALOGS = {
     { name: "西瑞", text: "漾～要統治世界怎麼不找本大爺～", action: [ 
       { type: "show", actor: "five" },
       { type: "runTo", actor: "five", x: 420, y: 200, ms: 300 },
-      { type: "sfx", key: "hit", volume: 0.8 },
+      { type: "sfx", key: "hit", volume: 0.5 },
       { type: "runTo", actor: "angel", x: 430, y: 225, ms: 400 },
       { type: "emote", actor: "angel", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
     ]},
@@ -1027,7 +1069,7 @@ const DIALOGS = {
     { name: "褚冥漾", text: "『但來的是最不正常的那一個......』", face: "cry" },
     { name: "  ", text: "安因微微瞇起眼睛，語氣溫和卻又帶著不可侵犯的氣勢：" },
     { name: "安因", text: "西瑞．羅耶伊亞同學，如今這個狀況，有必要再影響褚同學添一把亂嗎？" },
-    { name: "西瑞", text: "乾你這個天使什麼事情？本大爺說好了要跟小弟浪跡天涯統治世界！" },
+    { name: "西瑞", text: "干你這個天使什麼事情？本大爺說好了要跟小弟浪跡天涯統治世界！" },
     { name: "褚冥漾", text: "『不對，我根本沒說好好嗎？』", face: "uh" },
     { name: "安因", text: "這可不行，別說我們同不同意，公會已經下達命令，我們有責任阻止——妖師的叛變。" },
     { name: "西瑞", text: "哈！你想打架嗎？老子奉陪！" },
@@ -1097,12 +1139,16 @@ const DIALOGS = {
     { name: "褚冥漾", text: "你是誰？！！你！絕！對！不！是！我！姊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "褚冥漾", text: "快把頭腦正常的我姊還給我！", face: "cry" },
     { name: "褚冥漾", text: "不對！快把頭腦正常的所有人還給我！！！", face: "cry", action: { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 } },
+    { name: "白陵然", text: "褚冥漾，既然你拒不承認，我也只能......把你逐出妖師一族。" },
+    { name: "褚冥漾", text: "不是，我剛剛說什麼了！然你腦袋還好嗎？！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥玥", text: "褚冥漾，你再也不是我弟弟了！" },
+    { name: "褚冥漾", text: "這裡有人在聽我說話嗎！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
     { name: "？？？", text: "看來白色種族間的友誼不過如此。", action: { type: "show", actor: "coffee" } },
     { name: "  ", text: "耳邊的聲音相當熟悉，熟悉到讓褚冥漾的寒毛瞬間豎起，甚至不用回頭就知道對方的身分。", action: [
       { type: "face", actor: "coffee", dir: "left" },
       { type: "toPlayer", actor: "coffee", enterFrom: "right", enterDist: 260, side: "right", gapY: 3, ms: 150 }
    ] },
-    { name: "  ", text: "褚冥漾幾乎是立刻回頭同時往後跳開，在腦袋反應過來前手裡就已經握住米納斯對準來人，其餘在場眾人也紛紛改變方才宛如過家家般的態度，如臨大敵的面對不請自來的｢客人」。", action: [
+    { name: "  ", text: "褚冥漾幾乎是立刻回頭同時往後跳開，在腦袋反應過來前，手裡就已經握住米納斯對準來人，其餘在場眾人也紛紛改變方才宛如過家家般的態度，如臨大敵的面對不請自來的｢客人」。", action: [
       { type: "face", actor: "chu", dir: "right" },
       { type: "move", actor: "chu", dx: -15, dy: 0, ms: 200 },
       { type: "face", actor: "five", dir: "right" },
@@ -1119,7 +1165,7 @@ const DIALOGS = {
     { name: "安地爾", text: "（可能大概也許是在笑）"},
     { name: "褚冥漾", text: "......", face: "deny" },
     { name: "褚冥漾", text: "......", face: "wtf" },
-    { name: "  ", text: "被眾多武器包圍的安地爾卻絲毫不顯慌張，臉上仍然掛著游刃有餘的微笑，彷彿這只不過是，簡單掃過再場眾人各異的臉色後，輕笑一聲開口：" },
+    { name: "  ", text: "被眾多武器包圍的安地爾卻絲毫不顯慌張，臉上仍然掛著游刃有餘的微笑，彷彿這只不過是幼兒間的嬉戲打鬧，簡單掃過在場眾人各異的臉色後，輕笑一聲開口：" },
     { name: "安地爾", text: "不用那麼緊張，我目前正在休假中。" },
     { name: "褚冥漾", text: "『咖啡杯可以休假嗎？』", face: "really" },
     { name: "千冬歲", text: "你......" },
@@ -1134,7 +1180,7 @@ const DIALOGS = {
     { name: "千冬歲", text: "我的視力不需要背叛者關心！"},
     { name: "褚冥漾", text: "我不是那個意思！！", face: "wtf" },
     { name: "  ", text: "也許是笑話終於看夠了，此時安地爾才慢悠悠開口：" },
-    { name: "安地爾", text: "那麼凡斯的後代，既然你都被白色種族排斥了，要不要乾脆加入我這裡呢？", action: { type: "andiel_tease" } },
+    { name: "安地爾", text: "那麼凡斯的後代，既然你都被白色種族排斥了，要不要乾脆加入我這邊呢？", action: { type: "andiel_tease" } },
 
   ]
 };
@@ -1150,7 +1196,7 @@ const DIALOGS = {
     if (!DIALOGS.coffee_branch) {
       DIALOGS.coffee_branch = [
         { name: "  ", text: "(......)" },
-        { name: "  ", text: "一陣白光閃過，耳邊被帶離白園，來到一個詭異又荒謬......不，一個看起來意外的正常的地方。", action: { type: "show", actor: "coffee" } },
+        { name: "  ", text: "一陣白光閃過，耳邊嘈雜的人聲如潮水般退去，眼前風景迅速轉換，不再是寧靜（也許也沒那麼寧靜）的白園，來到一個詭異又荒謬......不，一個看起來意外的正常的地方。", action: { type: "show", actor: "coffee" } },
         { name: "安地爾", text: "歡迎來到我的休假地點。", action: { type: "toPlayer", actor: "coffee", enterFrom: "left", enterDist: 260, side: "right", gapY: 1, ms: 250 } },
         { name: "褚冥漾", text: "......咖啡廳？", face: "really" },
         { name: "  ", text: "不是褚冥漾想像中的黑色空間還是什麼詭異地方之類的，這裡的裝潢溫馨，空氣中甚至能聞到淡淡的咖啡香味。" },
@@ -1167,7 +1213,7 @@ const DIALOGS = {
         { name: "安地爾", text: "只是來找你敘敘舊而已。" },
         { name: "安地爾", text: "順帶一提，這裡已經不是你的夢了。" },
         { name: "褚冥漾", text: "『不要隨便帶人去奇怪的地方！』", face: "wtf" },
-        { name: "褚冥漾", text: "你到底想幹嗎？", face: "deny" },
+        { name: "褚冥漾", text: "你到底想幹嘛？", face: "deny" },
         { name: "安地爾", text: "別緊張，我都說我現在是休假狀態。" },
         { name: "  ", text: "看著褚冥漾明顯不信的表情，安地爾也只是輕笑一聲，沒有辯駁。" },
         { name: "安地爾", text: "想跟你閒談一小會也還真是不容易，這麼快就有人干涉了。" },
@@ -1319,6 +1365,7 @@ const DIALOGS = {
         { type: "runTo", actor: "twins2", x: 900, y: 900, ms: 250 },
         { type: "runTo", actor: "bigbro", x: 900, y: 900, ms: 250 },
         { type: "runTo", actor: "twins1", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "bing", x: 900, y: 900, ms: 250 },
         { type: "fadeBlack", to: 0, ms: 450 }
        ], auto: true},
         { name: "褚冥漾", text: "哈！", face: "shock", action: [
@@ -1336,9 +1383,14 @@ const DIALOGS = {
         { name: "褚冥漾", text: "嗯？" },
         { name: "千冬歲", text: "我在你心中的印象有這麼差嗎？夢裡的我也失智的太誇張了吧？" },
         { name: "褚冥漾", text: "嗯？！", action: { type: "cameraShake", ms: 180, intensity: 0.08 }, face: "really" },
+        { name: "米可蕥", text: "就是啊漾漾！夢裡的我們好過份喔！" },
+        { name: "褚冥漾", text: "欸？！", action: { type: "cameraShake", ms: 180, intensity: 0.08 }, face: "really" },
+        { name: "  ", text: "就連平時少言寡語的萊恩此時也開了口：" },
+        { name: "萊恩", text: "我不會那麼做的，漾漾。" },
+        { name: "  ", text: "褚冥漾猛地轉向冰炎，他親愛的學長正一副看好戲般的姿態，雙手環胸，背靠著牆慢悠悠開口：" },
         { name: "冰炎", text: "都看到了。" },
         { name: "冰炎", text: "你夢裡的內容大家都看到了。" },
-        { name: "褚冥漾", text: "欸！！！！！！！", action: { type: "cameraShake", ms: 230, intensity: 0.1 }, face: "shock" },
+        { name: "褚冥漾", text: "欸？！？！？！？！", action: { type: "cameraShake", ms: 230, intensity: 0.1 }, face: "shock" },
         { name: "  ", text: "最終，這件事以褚冥漾社死結束了。" },
         { name: "True End", text: "你協助褚冥漾打破次元壁，沒有付出代價就回到現實。" },
       ];
@@ -3358,4 +3410,5 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
