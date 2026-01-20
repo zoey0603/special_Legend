@@ -1294,7 +1294,7 @@ const DIALOGS = {
         { name: "冰炎", text: "需要我幫你回憶一下嗎？", face: "closea", action: { type: "move", actor: "bingt", dx: -10, dy: 0, ms: 300 } },
         { name: "褚冥漾", text: "不用了謝謝。", action: { type: "move", actor: "chu", dx: -8, dy: 0, ms: 300 }, face: "nolove" },
         { name: "（假）冰炎", text: "褚。", face: "ang" },
-        { name: "  ", text: "褚冥漾回過頭，看向頭髮顏色明顯錯邊的假學長", action: { type: "face", actor: "chu", dir: "left" } },
+        { name: "  ", text: "褚冥漾回過頭，看向頭髮顏色明顯錯邊的假學長。", action: { type: "face", actor: "chu", dir: "left" } },
         { name: "  ", text: "他正用一種......彷彿看到學弟找了個拙劣替代品的表情看著褚冥漾。"},
         { name: "（假）冰炎", text: "", face: "dar" },
         { name: "  ", text: "並且準備將他分屍丟大海。"},
@@ -3410,5 +3410,6 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
 
