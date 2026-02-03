@@ -1522,10 +1522,10 @@ const DIALOGS = {
       { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 }
    ]},
     { name: "白陵然", text: "褚冥漾，既然你拒不承認，我也只能......把你逐出妖師一族。" },
-    { name: "褚冥漾", text: "不是，我剛剛說什麼了！然你腦袋還好嗎？！", action: [
+    { name: "褚冥漾", text: "不是，我剛剛說什麼了！然你腦袋還好嗎？！", face: "wtf", action: [
       { type: "cameraShake", ms: 180, intensity: 0.05 },
       { type: "sfx", key: "cameraShake", volume: 0.3 },
-   ]},
+   ]},,
     { name: "褚冥玥", text: "褚冥漾，你再也不是我弟弟了！" },
     { name: "褚冥漾", text: "這裡有人在聽我說話嗎！", face: "wtf", action: [
       { type: "cameraShake", ms: 180, intensity: 0.05 },
@@ -4100,3 +4100,4 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
