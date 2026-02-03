@@ -56,6 +56,50 @@ let _choiceOptions = [];
 // 若你希望「關掉瀏覽器也不要再跳」，把 sessionStorage 改成 localStorage 即可。
 const WARNING_KEY = "MZ_WARNING_SHOWN_V1";
 
+
+
+// ===== Warning Audio Gate =====
+// 需求：
+// 1) 警語期間播放 warming（循環）
+// 2) 警語沒關掉前，先不要出現 prologue_fire 的 fire 循環音效 / 地圖環境音
+window.__WARNING_ACTIVE__ = window.__WARNING_ACTIVE__ ?? false;
+window.__WARNING_MUSIC__ = window.__WARNING_MUSIC__ ?? null;
+window.__WARNING_MUSIC_BASE_VOL__ = window.__WARNING_MUSIC_BASE_VOL__ ?? 0.6;
+
+function stopWarningMusic(){
+  const s = window.__WARNING_MUSIC__;
+  if (s) {
+    try { s.stop(); } catch(_e){}
+    try { s.destroy(); } catch(_e){}
+  }
+  window.__WARNING_MUSIC__ = null;
+}
+
+function startWarningMusic(scene, { key = "warming", volume = 0.2, rate = 1, detune = 0 } = {}){
+  if (!scene?.sound || !key) return;
+  stopWarningMusic();
+
+  const master = window.__MUSIC_VOL__ ?? 1;
+  const s = scene.sound.add(key, {
+    loop: true,
+    volume: volume * master,
+    rate,
+    detune,
+  });
+  s.play();
+
+  window.__WARNING_MUSIC__ = s;
+  window.__WARNING_MUSIC_BASE_VOL__ = volume;
+}
+
+function refreshWarningMusicVolume(){
+  const s = window.__WARNING_MUSIC__;
+  if (!s) return;
+  const base = window.__WARNING_MUSIC_BASE_VOL__ ?? 1;
+  const master = window.__MUSIC_VOL__ ?? 1;
+  try { s.setVolume(base * master); } catch(_e){}
+}
+
 function _warningStore(){
   try{ return window.sessionStorage; } catch(_e){ return null; }
 }
@@ -82,7 +126,12 @@ function hideWarningOverlay(){
 function bootShowWarningOnce(scene){
   // 只顯示一次（同一個分頁）
   const store = _warningStore();
-  if (store && store.getItem(WARNING_KEY) === "1") return false;
+  if (store && store.getItem(WARNING_KEY) === "1") {
+    // 保險：若曾有殘留，確保不會卡住
+    window.__WARNING_ACTIVE__ = false;
+    try { stopWarningMusic(); } catch (_e) {}
+    return false;
+  }
 
   const full = document.getElementById("warningFull");
   const out  = document.getElementById("warningText");
@@ -94,6 +143,13 @@ function bootShowWarningOnce(scene){
 
   // 警語期間先暫停 Phaser（避免背景繼續跑）
   try{ scene?.scene?.pause?.(); }catch(_e){}
+
+  // ✅ 警語期間：播放 warming 音樂，並先關掉所有循環音效/音樂（避免 fire 提前出現）
+  window.__WARNING_ACTIVE__ = true;
+  try { stopLoopSfx(); } catch (_e) {}
+  try { stopMapLoopSfx(); } catch (_e) {}
+  try { stopMapLoopMusic(); } catch (_e) {}
+  try { startWarningMusic(scene, { key: "warming", volume: 0.2 }); } catch (_e) {}
 
   showWarningOverlay();
 
@@ -109,6 +165,12 @@ function bootShowWarningOnce(scene){
   }
 
   function closeAndContinue(){
+    // ✅ 關閉警語：停止 warming 音樂，解除阻擋
+    try { stopWarningMusic(); } catch (_e) {}
+    window.__WARNING_ACTIVE__ = false;
+    // 保險：如果先前有殘留 fire 聲，這裡先停掉
+    try { scene?.sound?.stopByKey?.("fire"); } catch (_e) {}
+
     hideWarningOverlay();
     if (store) store.setItem(WARNING_KEY, "1");
 
@@ -311,6 +373,11 @@ function showEndOverlay() {
   gs.phase = "ended";
   gs.finished = true;
 
+  // ✅ END 畫面就不需要循環音效了
+  try { stopLoopSfx(); } catch (_e) {}
+  try { stopMapLoopSfx(); } catch (_e) {}
+  try { stopMapLoopMusic(); } catch (_e) {}
+
   // 在 END 畫面前先插入一次「感謝名單」(2.5 秒)
   const creditsEl = document.getElementById("endCredits");
   const finalEl   = document.getElementById("endFinal");
@@ -417,6 +484,10 @@ function refreshBackButton() {
 
 function showMenu() {
   const gs = ensureGameState();
+  // ✅ 回到主選單時停止段落循環音效/地圖環境音/地圖 BGM
+  try { stopLoopSfx(); } catch (_e) {}
+  try { stopMapLoopSfx(); } catch (_e) {}
+  try { stopMapLoopMusic(); } catch (_e) {}
   refreshContinueButton();
   refreshBackButton();
 
@@ -491,11 +562,266 @@ function closeSettings() {
 window.__SFX_VOL__ = window.__SFX_VOL__ ?? 1;
 sfxVolEl.addEventListener("input", () => {
   window.__SFX_VOL__ = parseFloat(sfxVolEl.value || "1");
+  try { refreshLoopSfxVolume(); } catch (_e) {}
+  try { refreshMapLoopSfxVolume(); } catch (_e) {}
 });
 
 musicVolEl.addEventListener("input", () => {
   window.__MUSIC_VOL__ = parseFloat(musicVolEl.value || "1");
+  try { refreshMapLoopMusicVolume(); } catch (_e) {}
+  try { refreshWarningMusicVolume(); } catch (_e) {}
 });
+
+
+// ===== Loop SFX for whole story segment =====
+// 用法：在 STAGE_LOOP_SFX 設定每段劇情要循環播放的音效 key。
+// 會在 openCurrentDialog() 進入該段時自動開始，離開該段時自動停止。
+// key 必須是你 preload 時有載入的音效 key（例如你 action.type==="sfx" 用過的那些 key）。
+
+window.__LOOP_SFX__ = window.__LOOP_SFX__ ?? null;
+window.__LOOP_SFX_KEY__ = window.__LOOP_SFX_KEY__ ?? null;
+window.__LOOP_SFX_BASE_VOL__ = window.__LOOP_SFX_BASE_VOL__ ?? 1;
+window.__LOOP_SFX_STAGE__ = window.__LOOP_SFX_STAGE__ ?? null;
+
+// ✅ 你想要「整段劇情」循環音效，就在這裡指定：
+// 例：prologue_fire 一直有火焰聲；wake_blackhall 你可改成你想要的 key（或先註解掉）
+const STAGE_LOOP_SFX = {
+  coffee_branch: { key: "coffeeshop", volume: 0.15 },
+  // wake_blackhall: { key: "Dream", volume: 0.15 },
+  // white_garden: { key: "wind", volume: 0.25 }, // 如果你有 wind 音效的話
+};
+
+function stopLoopSfx() {
+  const s = window.__LOOP_SFX__;
+  if (s) {
+    try { s.stop(); } catch (_e) {}
+    try { s.destroy(); } catch (_e) {}
+  }
+  window.__LOOP_SFX__ = null;
+  window.__LOOP_SFX_KEY__ = null;
+  window.__LOOP_SFX_BASE_VOL__ = 1;
+  window.__LOOP_SFX_STAGE__ = null;
+}
+
+function startLoopSfx(scene, key, opts = {}) {
+  if (!scene?.sound || !key) return;
+  // ✅ 警語期間先不要開啟 fire 循環音效
+  if (window.__WARNING_ACTIVE__ && key === "fire") return;
+  // 換段先停掉舊的
+  stopLoopSfx();
+
+  const baseVol = opts.volume ?? 1;
+  const master = window.__SFX_VOL__ ?? 1;
+  const rate = opts.rate ?? 1;
+  const detune = opts.detune ?? 0;
+
+  // 用 add 才能拿到 Sound 物件做 setVolume/stop
+  const s = scene.sound.add(key, {
+    loop: true,
+    volume: baseVol * master,
+    rate,
+    detune,
+  });
+  s.play();
+
+  window.__LOOP_SFX__ = s;
+  window.__LOOP_SFX_KEY__ = key;
+  window.__LOOP_SFX_BASE_VOL__ = baseVol;
+}
+
+function refreshLoopSfxVolume() {
+  const s = window.__LOOP_SFX__;
+  if (!s) return;
+  const baseVol = window.__LOOP_SFX_BASE_VOL__ ?? 1;
+  const master = window.__SFX_VOL__ ?? 1;
+  try { s.setVolume(baseVol * master); } catch (_e) {}
+}
+
+function applyStageLoopSfx(stageId) {
+  // ✅ 警語期間先不要出現 prologue_fire 的 fire 循環音效
+  if (window.__WARNING_ACTIVE__) {
+    try { stopLoopSfx(); } catch (_e) {}
+    window.__LOOP_SFX_STAGE__ = null; // 之後解除警語還能正常套用
+    return;
+  }
+
+  // 同一段就不用重開
+  if (window.__LOOP_SFX_STAGE__ === stageId) return;
+
+  // 先標記（避免遞迴/重入）
+  window.__LOOP_SFX_STAGE__ = stageId;
+
+  const cfg = STAGE_LOOP_SFX[stageId];
+  const scene = window.__SCENE__;
+
+  if (!cfg) {
+    stopLoopSfx();
+    return;
+  }
+  startLoopSfx(scene, cfg.key, cfg);
+}
+
+
+// ===== Loop SFX bound to map (ambient) =====
+// 會在 loadStageMap() 換地圖時自動切換；同一張地圖不重開。
+// ※ 這套「地圖綁定循環音效」不會影響你原本 action.type === "sfxLoop" / "sfxStop" 的劇情循環音效。
+window.__MAP_LOOP_SFX__ = window.__MAP_LOOP_SFX__ ?? null;
+window.__MAP_LOOP_SFX_KEY__ = window.__MAP_LOOP_SFX_KEY__ ?? null;
+window.__MAP_LOOP_SFX_BASE_VOL__ = window.__MAP_LOOP_SFX_BASE_VOL__ ?? 1;
+window.__MAP_LOOP_SFX_STAGE__ = window.__MAP_LOOP_SFX_STAGE__ ?? null;
+
+// ✅ 你想要「某張地圖」一直有環境音，就在這裡指定：
+const MAP_LOOP_SFX = {
+  prologue_fire: { key: "fire", volume: 0.15 },
+  white_garden: { key: "bird", volume: 0.4 }, // white_garden 綁 bird
+  blackhall: { key: "Dream", volume: 0.15 },
+  // coffee: { key: "coffeeshop", volume: 0.15 }, // 若你想把 coffeeshop 當環境音也可以
+};
+
+function stopMapLoopSfx() {
+  const s = window.__MAP_LOOP_SFX__;
+  if (s) {
+    try { s.stop(); } catch (_e) {}
+    try { s.destroy(); } catch (_e) {}
+  }
+  window.__MAP_LOOP_SFX__ = null;
+  window.__MAP_LOOP_SFX_KEY__ = null;
+  window.__MAP_LOOP_SFX_BASE_VOL__ = 1;
+  window.__MAP_LOOP_SFX_STAGE__ = null;
+}
+
+function startMapLoopSfx(scene, key, opts = {}) {
+  if (!scene?.sound || !key) return;
+  // ✅ 警語期間：不要播放地圖環境音效
+  if (window.__WARNING_ACTIVE__) return;
+  stopMapLoopSfx();
+
+  const baseVol = opts.volume ?? 1;
+  const master = window.__SFX_VOL__ ?? 1;
+  const rate = opts.rate ?? 1;
+  const detune = opts.detune ?? 0;
+
+  const s = scene.sound.add(key, {
+    loop: true,
+    volume: baseVol * master,
+    rate,
+    detune,
+  });
+  s.play();
+
+  window.__MAP_LOOP_SFX__ = s;
+  window.__MAP_LOOP_SFX_KEY__ = key;
+  window.__MAP_LOOP_SFX_BASE_VOL__ = baseVol;
+}
+
+function refreshMapLoopSfxVolume() {
+  const s = window.__MAP_LOOP_SFX__;
+  if (!s) return;
+  const baseVol = window.__MAP_LOOP_SFX_BASE_VOL__ ?? 1;
+  const master = window.__SFX_VOL__ ?? 1;
+  try { s.setVolume(baseVol * master); } catch (_e) {}
+}
+
+function applyMapLoopSfx(stageKey, sceneOverride) {
+  // ✅ 警語期間：不要播放地圖環境音效
+  if (window.__WARNING_ACTIVE__) {
+    try { stopMapLoopSfx(); } catch (_e) {}
+    window.__MAP_LOOP_SFX_STAGE__ = null;
+    return;
+  }
+
+  if (window.__MAP_LOOP_SFX_STAGE__ === stageKey) return;
+  window.__MAP_LOOP_SFX_STAGE__ = stageKey;
+
+  const cfg = MAP_LOOP_SFX[stageKey];
+  const scene = sceneOverride || window.__SCENE__;
+
+  if (!cfg) {
+    stopMapLoopSfx();
+    return;
+  }
+  startMapLoopSfx(scene, cfg.key, cfg);
+}
+
+
+// ===== Loop MUSIC bound to map (BGM) =====
+// 會在 loadStageMap() 換地圖時自動切換；用 musicVol 控制音量。
+window.__MAP_LOOP_MUSIC__ = window.__MAP_LOOP_MUSIC__ ?? null;
+window.__MAP_LOOP_MUSIC_KEY__ = window.__MAP_LOOP_MUSIC_KEY__ ?? null;
+window.__MAP_LOOP_MUSIC_BASE_VOL__ = window.__MAP_LOOP_MUSIC_BASE_VOL__ ?? 1;
+window.__MAP_LOOP_MUSIC_STAGE__ = window.__MAP_LOOP_MUSIC_STAGE__ ?? null;
+
+// ✅ 你想要「某張地圖」一直播放 BGM，就在這裡指定：
+const MAP_LOOP_MUSIC = {
+  coffee: { key: "coffeeshop", volume: 0.35 }, // coffee 綁 coffeeshop（循環 BGM）
+  // white_garden: { key: "coloregg", volume: 0.30 }, // 例：白園 BGM
+};
+
+function stopMapLoopMusic() {
+  const s = window.__MAP_LOOP_MUSIC__;
+  if (s) {
+    try { s.stop(); } catch (_e) {}
+    try { s.destroy(); } catch (_e) {}
+  }
+  window.__MAP_LOOP_MUSIC__ = null;
+  window.__MAP_LOOP_MUSIC_KEY__ = null;
+  window.__MAP_LOOP_MUSIC_BASE_VOL__ = 1;
+  window.__MAP_LOOP_MUSIC_STAGE__ = null;
+}
+
+function startMapLoopMusic(scene, key, opts = {}) {
+  if (!scene?.sound || !key) return;
+  // ✅ 警語期間：只播 warming，不播地圖 BGM
+  if (window.__WARNING_ACTIVE__) return;
+  stopMapLoopMusic();
+
+  const baseVol = opts.volume ?? 1;
+  const master = window.__MUSIC_VOL__ ?? 1;
+  const rate = opts.rate ?? 1;
+  const detune = opts.detune ?? 0;
+
+  const s = scene.sound.add(key, {
+    loop: true,
+    volume: baseVol * master,
+    rate,
+    detune,
+  });
+  s.play();
+
+  window.__MAP_LOOP_MUSIC__ = s;
+  window.__MAP_LOOP_MUSIC_KEY__ = key;
+  window.__MAP_LOOP_MUSIC_BASE_VOL__ = baseVol;
+}
+
+function refreshMapLoopMusicVolume() {
+  const s = window.__MAP_LOOP_MUSIC__;
+  if (!s) return;
+  const baseVol = window.__MAP_LOOP_MUSIC_BASE_VOL__ ?? 1;
+  const master = window.__MUSIC_VOL__ ?? 1;
+  try { s.setVolume(baseVol * master); } catch (_e) {}
+}
+
+function applyMapLoopMusic(stageKey, sceneOverride) {
+  // ✅ 警語期間：只播 warming，不播地圖 BGM
+  if (window.__WARNING_ACTIVE__) {
+    try { stopMapLoopMusic(); } catch (_e) {}
+    window.__MAP_LOOP_MUSIC_STAGE__ = null;
+    return;
+  }
+
+  if (window.__MAP_LOOP_MUSIC_STAGE__ === stageKey) return;
+  window.__MAP_LOOP_MUSIC_STAGE__ = stageKey;
+
+  const cfg = MAP_LOOP_MUSIC[stageKey];
+  const scene = sceneOverride || window.__SCENE__;
+
+  if (!cfg) {
+    stopMapLoopMusic();
+    return;
+  }
+  startMapLoopMusic(scene, cfg.key, cfg);
+}
+
 
 
 function getActiveSliderEl() {
@@ -924,7 +1250,7 @@ const DIALOGS = {
     { name: "  ", text: "褚冥漾回過神看見自己熟悉的場景變化，臉上佈滿驚恐。" },
     { name: "  ", action: { type: "move", actor: "chu", dx: -24, dy: 0, ms: 300 }, auto: true },
     { name: "褚冥漾", text: "怎、怎麼回事......", face: "shock"},
-    { name: "  ", text: "學院裡似乎沒有一個活口。" },
+    { name: "  ", text: "學院裡似乎沒有一個活口。"},
     { name: "  ", text: "他不過是出了一場黑袍任務而已，回來時候便收到公會系統癱瘓，學院遭到不知名強大力量攻擊。" },
     { name: "  ", text: "他一收到消息趕緊跑回來，卻在校園門口因為焦急一時不察踩到陷阱。" },
     { name: "  ", text: "頓時就像頭被人重擊暈眩不已，等到思緒清晰後人已在校園內。" },
@@ -936,6 +1262,7 @@ const DIALOGS = {
     { name: "  ", text: "在不破壞周遭一切的情況下，他回過身想找到夥伴們會合，了解到底發生什麼事情，還有現況到底是怎麼回事。", action: { type: "face", actor: "chu", dir: "left" } },
     { name: "  ", text: "卻沒想到在自己轉身的那一剎，不知何時自己身後卻站著一個人——可利器卻已沒入自己胸口。", action: [
      { type: "set", actor: "bing", key: "__forcedFlipX", value: true },
+     { type: "sfx", key: "shu", volume: 0.5 },
      { type: "dashBehind", actor: "bing", target: "chu", dx: -10, dy: 0, ms: 220 } 
      ]},
     { name: "  ", text: "他瞪大眼睛詫異，憑他的能力居然沒發覺身後有人。" },
@@ -952,9 +1279,11 @@ const DIALOGS = {
     { name: "  ", text: "他還是顧及褚冥漾之間的情份；他能做的就是減少對方的痛苦，送對方儘早投胎。" },
     { name: "  ", text: "噗嗤！", action: [
   { type: "move", actor: "bing", dx: -5, dy: 0, ms: 200 },
+  { type: "sfx", key: "hurt", volume: 0.5 },
   { type: "cameraZoom", from: 3, to: 4.2, ms: 200 },
   { type: "flashWhite", peak: 0.95, msIn: 50, msOut: 200 },
-  { type: "cameraShake", ms: 180, intensity: 0.02 }
+  { type: "sfx", key: "blooding", volume: 0.5 },
+  { type: "cameraShake", ms: 180, intensity: 0.02 },
 ] },
     { name: "  ", text: "感受到心臟被硬生生的刺碎摧毀，褚冥漾的眼眸滑出一滴淚。" },
     { name: "  ", text: "隨後本來熠熠生輝的瞳孔失去了色彩，染上了灰；身子就如同斷了線的布娃娃，在長槍被抽出時破敗不堪的落在地上。", action: [
@@ -1000,6 +1329,7 @@ const DIALOGS = {
     { name: "  ", text: "回過身褚冥漾看向來者，只見對方手舉著一把它熟悉到不能再熟悉的長弓，指著他吶喊他是背叛者。", action: { type: "face", actor: "chu", dir: "left" } },
     { name: "千冬歲", text: "褚冥漾！你竟敢傷害夏碎哥！", action: [ 
       { type: "show", actor: "qian" },
+      { type: "sfx", key: "running", volume: 0.3 },
       { type: "runTo", actor: "qian", x: 425, y: 196, ms: 450 }
  ]},
     { name: "褚冥漾", text: "......蛤？", face: "shock" },
@@ -1012,32 +1342,58 @@ const DIALOGS = {
     { name: "米可蕥", text: "喵喵對你實在是太失望了！" , action: [ 
       { type: "runTo", actor: "qian", x: 450, y: 170, ms: 500 }, 
       { type: "show", actor: "cat" },
+      { type: "sfx", key: "running", volume: 0.5 },
       { type: "runTo", actor: "cat", x: 425, y: 196, ms: 450 }
     ]},
-    { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！",action: { type: "jump", actor: "cat" } },
+    { name: "米可蕥", text: "一直以來喵喵都看錯人了！虧喵喵一直以來都把你當朋友看！", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "cat" },
+   ]},
     { name: "褚冥漾", text: "喵喵？！", face: "shock" },
-    { name: "米可蕥", text: "沒想到你到現在竟然還不承認罪行！",action: { type: "jump", actor: "cat" } },
+    { name: "米可蕥", text: "沒想到你到現在竟然還不承認罪行！", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "cat" },
+   ]},
     { name: "褚冥漾", text: "你們有給我辯解的機會嗎！！！", face: "wtf" },
     { name: "  ", text: "這時，米可蕥往旁邊移動了些，給來人讓出些位置。", action: [ 
       { type: "runTo", actor: "qian", x: 450, y: 165, ms: 500 }, 
       { type: "runTo", actor: "cat", x: 405, y: 170, ms: 500 },
       { type: "show", actor: "ryan" },
+     { type: "sfx", key: "running", volume: 0.5 },
       { type: "runTo", actor: "ryan", x: 420, y: 196, ms: 500 }
     ]},
-    { name: "米可蕥", text: "你看！把萊恩打得都只能隱身了！", action: { type: "jump", actor: "cat" } },
+    { name: "米可蕥", text: "你看！把萊恩打得都只能隱身了！", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "cat" },
+   ]},
     { name: "萊恩？", text: "......" },
     { name: "褚冥漾", text: "......" },
-    { name: "褚冥漾", text: "屁啦！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "屁啦！！！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "褚冥漾", text: "『槽點太多了不知道該從哪裡開始吐槽......』", face: "deny" },
     { name: "褚冥漾", text: "『這絕對是有人偷工減料吧......』", face: "wtf" },
     { name: "萊恩？", text: "你不再是我萊恩．史凱爾的朋友了。" },
-    { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "really", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "你還是先解除隱身狀態吧！！！", face: "really", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "萊恩？", text: "我不會隱身......", action: { type: "runTo", actor: "qian", x: 455, y: 145, ms: 500 } },
     { name: "  ", text: "萊恩一臉失落（雖然其實根本看不到表情）的往旁邊移動了一些。", action:{ type: "runTo", actor: "ryan", x: 440, y: 167, ms: 600 } },
-    { name: "千冬歲", text: "你這個邪惡的妖師！現在竟然還對萊恩進行精神攻擊！！！", action: { type: "jump", actor: "qian" } },
+    { name: "千冬歲", text: "你這個邪惡的妖師！現在竟然還對萊恩進行精神攻擊！！！", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "qian" } 
+  ]},
     { name: "褚冥漾", text: "千冬歲你睜開眼睛看看啊！我不信你兩眼空空看不清楚是誰在傷害萊恩！！！", face: "wtf" },
-    { name: "千冬歲", text: "閉嘴！你這個背叛者沒資格喊我的名字，聽了就噁心!", action: { type: "jump", actor: "qian" } },
-    { name: "褚冥漾", text: "到底是怎樣啊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "千冬歲", text: "閉嘴！你這個背叛者沒資格喊我的名字，聽了就噁心!", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "qian" },
+   ]},
+    { name: "褚冥漾", text: "到底是怎樣啊！！！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "  ", text: "在褚冥漾怒吼完後，遠處再次傳來一個聲音。" },
     { name: "？？？", text: "褚冥漾！勸你乖乖束手就擒！" },
     { name: "褚冥漾", text: "還來啊......這次又是誰？", face: "really" },
@@ -1048,19 +1404,27 @@ const DIALOGS = {
     { name: "安因", text: "為什麼......要傷害賽塔？" },
     { name: "褚冥漾", text: "......" },
     { name: "褚冥漾", text: "......", face: "uh" },
-    { name: "褚冥漾", text: "......哩喜勒靠！！！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "......哩喜勒靠！！！！！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "褚冥漾", text: "安因你不是天使嗎？！你要不要聽聽看你在說甚麼？！！！", face: "wtf" },
     { name: "褚冥漾", text: "我打賽塔？？！！那像話嗎？！", face: "wtf" },
     { name: "褚冥漾", text: "我怎麼打？？！用米納斯嗎？！他隨便一個肘擊就能把我肋骨打斷了好嗎！！！", face: "wtf" },
     { name: "安因", text: "漾漾，天堂地獄一念之間，路是自己走出來的，別把自己的路走絕了，好嗎？" },
     { name: "褚冥漾", text: "......我唯一的路就是跑路。", face: "uh" },
     { name: "安因", text: "那就沒辦法了......褚冥漾，我奉公會之令，在此討伐你。" },
-    { name: "褚冥漾", text: "聽我說話啊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "聽我說話啊！！！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "西瑞", text: "漾～要統治世界怎麼不找本大爺～", action: [ 
       { type: "show", actor: "five" },
+      { type: "sfx", key: "running", volume: 0.3 },
       { type: "runTo", actor: "five", x: 420, y: 200, ms: 300 },
-      { type: "sfx", key: "hit", volume: 0.5 },
+      { type: "sfx", key: "hit", volume: 0.3 },
       { type: "runTo", actor: "angel", x: 430, y: 225, ms: 400 },
+      { type: "sfx", key: "emote", volume: 0.3 },
       { type: "emote", actor: "angel", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
     ]},
     { name: "褚冥漾", text: "『嗯，終於來了個正常的。』"},
@@ -1082,6 +1446,7 @@ const DIALOGS = {
     { name: "  ", text: "褚冥漾心累了，他眼神死的望向來人，是前幾天才見過面的水妖精，但不知道是哪一個。", action: [ 
       { type: "show", actor: "twins1" },
       { type: "runTo", actor: "angel", x: 435, y: 255, ms: 500 },
+      { type: "sfx", key: "running", volume: 0.3 },
       { type: "runTo", actor: "twins1", x: 420, y: 205, ms: 500 } 
       ]},
     { name: "雷多", text: "褚冥漾！你為什麼要傷害伊多！！！" },
@@ -1089,16 +1454,21 @@ const DIALOGS = {
     { name: "  ", text: "而此時，褚冥漾身後傳來了另一個與雷多聲線極為相似的男聲。" },
     { name: "雅多", text: "雷多，你清醒一點！", action: [
   { type: "show", actor: "twins2" },
+  { type: "sfx", key: "running", volume: 0.3 },
   { type: "toPlayer", actor: "twins2", enterFrom: "right", enterDist: 260, side: "right", gapY: 1, ms: 250 }
 ]},
     { name: "雅多", text: "漾漾的實力哪有辦法打傷伊多！！", action: { type: "toPlayer", actor: "twins2", side: "up", gapY: 1, ms: 450 }},
-    { name: "褚冥漾", text: "『真是謝囉！！！』", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "『真是謝囉！！！』", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "  ", text: "聞聽此言，雷多原本憤怒如惡鬼的臉轉為困惑，紅色的雙眸逐漸變回溫潤的褐色，他張口欲言，卻又很快抿緊唇瓣，似乎是想不出更合理的理由反駁。" },
     { name: "雷多", text: "可是......影像球上......" },
     { name: "  ", text: "雷多似乎還想掙扎一下，可隨後一個溫潤的聲音打斷了他的思緒，也讓他的雙眸重新亮起。" },
     { name: "伊多", text: "雷多。", action: [
   { type: "show", actor: "bigbro" },
   { type: "face", actor: "bigbro", dir: "left" },
+  { type: "sfx", key: "running", volume: 0.3 },
   { type: "toPlayer", actor: "bigbro", enterFrom: "right", enterDist: 260, side: "right", gapY: 1, ms: 450 },
   ]},
     { name: "雷多", text: "伊多！", action: { type: "toPlayer", actor: "bigbro", side: "down", gapY: 1, ms: 450 } },
@@ -1111,15 +1481,23 @@ const DIALOGS = {
     { name: "褚冥漾", text: "『倒不如說我才想謝謝你相信我的實力。』", face: "cry" },
     { name: "  ", text: "氣氛變得有些詭譎，水妖精三兄弟的談話皆被在場眾人聽進耳裡，不少人臉上都出現了動搖。" },
     { name: "  ", text: "最後是千冬歲打破了詭異的平靜。" },
-    { name: "千冬歲", text: "大家不要被騙了！邪惡的妖師肯定是使用了言靈操控了獸王族跟水妖精三兄弟！", action: { type: "jump", actor: "qian" } },
-    { name: "褚冥漾", text: "千冬歲哩系中猴喔！！！你也太看得起我了吧！！！", face: "wtf", action: { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 } },
+    { name: "千冬歲", text: "大家不要被騙了！邪惡的妖師肯定是使用了言靈操控了獸王族跟水妖精三兄弟！", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "qian" },
+   ] },
+    { name: "褚冥漾", text: "千冬歲哩系中猴喔！！！你也太看得起我了吧！！！", face: "wtf", action: [
+      { type: "sfx", key: "emote", volume: 0.3 },
+      { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 }
+   ]},
     { name: "千冬歲", text: "大家都清楚你有怎樣強大的力量，不要再裝蒜了！" },
     { name: "？？？", text: "沒錯。", action: [
   { type: "show", actor: "ran" },
   { type: "show", actor: "moon" }
   ]},
     { name: "  ", text: "來人聲音不大，卻一下吸引了所有人的注意——是白陵然，身後跟著褚冥玥。", action: [
+      { type: "sfx", key: "running", volume: 0.3 },
       { type: "runTo", actor: "ran", x: 435, y: 200, ms: 600 },
+      { type: "sfx", key: "running", volume: 0.3 },
       { type: "runTo", actor: "moon", x: 400, y: 205, ms: 450 } 
     ]},
     { name: "  ", text: "若是平時，在看到白陵然後，褚冥漾應該會感到安心，然而一堆好友腦袋突然變得不正常，加上白陵然和褚冥玥兩人凝重的臉色，讓褚冥漾有種非常、非常不好的預感。" },
@@ -1134,13 +1512,25 @@ const DIALOGS = {
     { name: "褚冥玥", text: "漾漾，辛西亞從來沒有虧待過你，她還做綠豆湯給你喝，為什麼要傷害她？" },
     { name: "褚冥漾", text: "......", face: "shock" },
     { name: "褚冥漾", text: "......", face: "deny" },
-    { name: "褚冥漾", text: "你是誰？！！你！絕！對！不！是！我！姊！！！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "你是誰？！！你！絕！對！不！是！我！姊！！！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "褚冥漾", text: "快把頭腦正常的我姊還給我！", face: "cry" },
-    { name: "褚冥漾", text: "不對！快把頭腦正常的所有人還給我！！！", face: "cry", action: { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 } },
+    { name: "褚冥漾", text: "不對！快把頭腦正常的所有人還給我！！！", face: "cry", action: [
+      { type: "sfx", key: "emote", volume: 0.3 },
+      { type: "emote", actor: "chu", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 }
+   ]},
     { name: "白陵然", text: "褚冥漾，既然你拒不承認，我也只能......把你逐出妖師一族。" },
-    { name: "褚冥漾", text: "不是，我剛剛說什麼了！然你腦袋還好嗎？！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "不是，我剛剛說什麼了！然你腦袋還好嗎？！", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "褚冥玥", text: "褚冥漾，你再也不是我弟弟了！" },
-    { name: "褚冥漾", text: "這裡有人在聽我說話嗎！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "這裡有人在聽我說話嗎！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "？？？", text: "看來白色種族間的友誼不過如此。", action: { type: "show", actor: "coffee" } },
     { name: "  ", text: "耳邊的聲音相當熟悉，熟悉到讓褚冥漾的寒毛瞬間豎起，甚至不用回頭就知道對方的身分。", action: [
       { type: "face", actor: "coffee", dir: "left" },
@@ -1170,10 +1560,15 @@ const DIALOGS = {
     { name: "褚冥漾", text: "『千冬歲？你終於要清醒了嗎？』", face: "really" },
     { name: "褚冥漾", text: "『快看清楚啊！對面這個別說是鬼族了，根本就是個咖啡杯啊！！還有很多奇怪的地方啊！！！』", face: "nolove" },
     { name: "千冬歲", text: "褚冥漾你竟然還跟鬼族勾結！！！", action: [
+      { type: "sfx", key: "emote", volume: 0.3 },
       { type: "emote", actor: "qian", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 },
+      { type: "sfx", key: "jump", volume: 0.3 },
       { type: "jump", actor: "qian" }
    ]},
-    { name: "褚冥漾", text: "（發自內心）幹！", face: "wtf", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+    { name: "褚冥漾", text: "（發自內心）幹！", face: "wtf", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
     { name: "褚冥漾", text: "千冬歲你視力還好嗎？！", face: "wtf" },
     { name: "千冬歲", text: "我的視力不需要背叛者關心！"},
     { name: "褚冥漾", text: "我不是那個意思！！", face: "wtf" },
@@ -1218,7 +1613,7 @@ const DIALOGS = {
         { name: "安地爾", text: "我們來做個交易吧。" },
         { name: "褚冥漾", text: "我不跟咖啡杯做交易。", face: "uh" },
         { name: "  ", text: "安地爾無視了褚冥漾帶刺的話語，朝褚冥漾走去，以迅雷不及掩耳的速度拔了一搓他的毛髮。", action: [
-        { type: "runTo", actor: "coffee", x: 45, y: 175, ms: 500 },
+        { type: "runTo", actor: "coffee", x: 40, y: 175, ms: 450 },
         { type: "move", actor: "chu", dx: -10, dy: 0, ms: 250 },
        ]},
         { name: "褚冥漾", text: "？？！！", face: "wtf" },
@@ -1249,7 +1644,10 @@ const DIALOGS = {
         { name: "安地爾", text: "別緊張，我都說我現在是休假狀態。" },
         { name: "  ", text: "說完，安地爾竟然就這麼離開了，讓人完全摸不清楚頭腦。", action: { type: "runTo", actor: "coffee", x: 1000, y: 205, ms: 450 } },
         { name: "褚冥漾", text: "......這傢伙到底來幹嘛的？", face: "uh" },
-        { name: "千冬歲", text: "褚冥漾你還不認罪嗎？", action: { type: "jump", actor: "qian" } },
+        { name: "千冬歲", text: "褚冥漾你還不認罪嗎？", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "qian" },
+   ] },
         { name: "褚冥漾", text: "......差點忘記你了。", face: "cry", action: [
       { type: "face", actor: "chu", dir: "left" },
       { type: "move", actor: "chu", dx: 10, dy: 0, ms: 200 },
@@ -1275,7 +1673,10 @@ const DIALOGS = {
       { type: "face", actor: "bingt", dir: "left" },
       { type: "toPlayer", actor: "bingt", enterFrom: "right", side: "right", offsetX: 32, ms: 250 },
        ] },
-        { name: "褚冥漾", text: "咦？！！", face: "shock", action: { type: "cameraShake", ms: 180, intensity: 0.05 } },
+        { name: "褚冥漾", text: "咦？！！", face: "shock", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.05 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
         { name: "  ", text: "褚冥漾猛地回頭，身後的那人是如此的熟悉，銀色的長髮在腦後束成俐落的馬尾，紅色的眼眸微微瞇起，正似笑非笑的盯著褚冥漾。", action: { type: "face", actor: "chu", dir: "right" } },
         { name: "褚冥漾", text: "？？？", face: "shock", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
@@ -1286,7 +1687,10 @@ const DIALOGS = {
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "left" }, auto: true },
         { name: "  ", text: "", action: { type: "face", actor: "chu", dir: "right" } },
-        { name: "冰炎", text: "......你在幹嘛？", action: { type: "emote", actor: "bingt", key: "angry", ms: 600, dx: 10, dy: 15, scale: 0.4 }, face: "dark" },
+        { name: "冰炎", text: "......你在幹嘛？", action: [
+      { type: "sfx", key: "emote", volume: 0.3 },
+      { type: "emote", actor: "bingt", key: "angry", ms: 800, dx: 10, dy: 15, scale: 0.4 }
+   ], face: "dark" },
         { name: "褚冥漾", text: "在確認哪個是真的學長。"},
         { name: "  ", text: "冰炎的嘴角抽搐了一下，閉上眼揉了揉眉心，額角青筋直跳捏緊拳頭看向褚冥漾。" },
         { name: "冰炎", text: "需要我幫你回憶一下嗎？", face: "closea", action: { type: "move", actor: "bingt", dx: -10, dy: 0, ms: 300 } },
@@ -1356,7 +1760,7 @@ const DIALOGS = {
         { type: "runTo", actor: "cat", x: 84, y: 68, ms: 250 },
         { type: "runTo", actor: "qian", x: 81, y: 95, ms: 250 },
         { type: "runTo", actor: "ryan", x: 101, y: 114, ms: 250 },
-        { type: "runTo", actor: "five", x: 140, y: 47, ms: 250 },
+        { type: "runTo", actor: "five", x: 127, y: 47, ms: 250 },
         { type: "runTo", actor: "moon", x: 900, y: 900, ms: 250 },
         { type: "runTo", actor: "ran", x: 900, y: 900, ms: 250 },
         { type: "runTo", actor: "angel", x: 900, y: 900, ms: 250 },
@@ -1371,7 +1775,10 @@ const DIALOGS = {
         { type: "fadeBlack", to: 0, ms: 650 }
        ]},
         { name: "冰炎", text: "清醒了嗎？"},
-        { name: "米可蕥", text: "太好了漾漾！你終於醒了！",action: { type: "jump", actor: "cat" } },
+        { name: "米可蕥", text: "太好了漾漾！你終於醒了！", action: [
+      { type: "sfx", key: "jump", volume: 0.3 },
+      { type: "jump", actor: "cat" },
+   ]},
         { name: "千冬歲", text: "你已經昏睡三天了。" },
         { name: "  ", text: "褚冥漾環顧四周，這是他在黑館的房間，他的朋友圍繞著床，面上滿是擔憂，包括看不見的萊恩。" },
         { name: "褚冥漾", text: "『啊......萊恩還是看不見啊......』", face: "nolove" },
@@ -1380,15 +1787,24 @@ const DIALOGS = {
         { name: "千冬歲", text: "是說......漾漾。" },
         { name: "褚冥漾", text: "嗯？" },
         { name: "千冬歲", text: "我在你心中的印象有這麼差嗎？夢裡的我也失智的太誇張了吧？" },
-        { name: "褚冥漾", text: "嗯？！", action: { type: "cameraShake", ms: 180, intensity: 0.08 }, face: "really" },
+        { name: "褚冥漾", text: "嗯？！", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.08 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ], face: "really" },
         { name: "米可蕥", text: "就是啊漾漾！夢裡的我們好過份喔！" },
-        { name: "褚冥漾", text: "欸？！", action: { type: "cameraShake", ms: 180, intensity: 0.08 }, face: "really" },
+        { name: "褚冥漾", text: "欸？！", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.08 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ], face: "really" },
         { name: "  ", text: "就連平時少言寡語的萊恩此時也開了口：" },
         { name: "萊恩", text: "我不會那麼做的，漾漾。" },
         { name: "  ", text: "褚冥漾猛地轉向冰炎，他親愛的學長正一副看好戲般的姿態，雙手環胸，背靠著牆慢悠悠開口：" },
         { name: "冰炎", text: "都看到了。" },
         { name: "冰炎", text: "你夢裡的內容大家都看到了。" },
-        { name: "褚冥漾", text: "欸？！？！？！？！", action: { type: "cameraShake", ms: 230, intensity: 0.1 }, face: "shock" },
+        { name: "褚冥漾", text: "欸？！？！？！？！", action: [
+      { type: "cameraShake", ms: 180, intensity: 0.1 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ], face: "shock" },
         { name: "  ", text: "最終，這件事以褚冥漾社死結束了。" },
         { name: "True End", text: "你協助褚冥漾打破次元壁，沒有付出代價就回到現實。" },
       ];
@@ -1741,8 +2157,9 @@ if (currentDialogId === "ending_B" && ryan) {
 if (currentDialogId === "white_garden" && angel) {
   angel.setVisible(shouldAngelBeVisible(lines, idx));
 }
+
 if (currentDialogId === "ending_B" && qian) {
-  angel.setVisible(shouldAngelBeVisible(lines, idx));
+  qian.setVisible(shouldqianBeVisible(lines, idx));
 }
 
 if (currentDialogId === "white_garden" && five) {
@@ -1872,6 +2289,8 @@ function openCurrentDialog() {
   storyIndex = 0;
   dialogOpen = true;
   dialogEl.classList.add("show");
+  // ✅ 進入該段劇情時，啟動/切換循環音效
+  try { applyStageLoopSfx(currentDialogId); } catch (_e) {}
   // 手機：對話開啟時可讓方向鍵消失
   try { window.__MZ_UPDATE_MOBILE_PAD__?.(); } catch (_e) {}
   renderDialog();
@@ -2663,7 +3082,7 @@ if (action.type === "emote") {
 }
 
 if (action.type === "sfx") {
-  const key = action.key ?? "hit" | "breaking";
+  const key = action.key ?? "hit" | "breaking" | "running" | "blooding" | "fire" | "cameraShake" | "jump" | "hurt" | "bird" | "shu" | "emote" | "hurt";
   const volume = action.volume ?? 1;
   const rate = action.rate ?? 1;
   const detune = action.detune ?? 0;
@@ -2675,6 +3094,24 @@ if (action.type === "sfx") {
   scene.sound.play(key, { volume: volume * master, rate, detune });
 
   return Promise.resolve(); // 播放不用等，直接往下跑劇情
+}
+
+
+if (action.type === "sfxLoop") {
+  // 在劇情中手動開啟循環音效（覆蓋 STAGE_LOOP_SFX 的預設也可以）
+  const key = action.key;
+  const volume = action.volume ?? 1;
+  const rate = action.rate ?? 1;
+  const detune = action.detune ?? 0;
+
+  startLoopSfx(scene, key, { volume, rate, detune });
+  return Promise.resolve();
+}
+
+if (action.type === "sfxStop") {
+  // 在劇情中手動停止循環音效
+  stopLoopSfx();
+  return Promise.resolve();
 }
 
   // 衝刺到某角色背後（動畫）
@@ -2917,6 +3354,23 @@ preload() {
   // this.load.image("bing_front", "assets/bing_front.png");
   this.load.audio("hit", "assets/audio/hit.mp3");
   this.load.audio("breaking", "assets/audio/breaking.mp3");
+  this.load.audio("blooding", "assets/audio/blooding.mp3");
+  this.load.audio("jump", "assets/audio/jump.mp3");
+  this.load.audio("running", "assets/audio/running.mp3");
+  this.load.audio("cameraShake", "assets/audio/cameraShake.mp3");
+  this.load.audio("fire", "assets/audio/fire.mp3");
+  this.load.audio("hurt", "assets/audio/hurt.mp3");
+  this.load.audio("no", "assets/audio/no.mp3");
+  this.load.audio("sure", "assets/audio/sure.mp3");
+  this.load.audio("walk", "assets/audio/walk.mp3");
+  this.load.audio("warming", "assets/audio/warming.mp3");
+  this.load.audio("bird", "assets/audio/bird.mp3");
+  this.load.audio("emote", "assets/audio/emote.mp3");
+  this.load.audio("shu", "assets/audio/shu.mp3");
+
+  this.load.audio("coloregg", "assets/audio/coloregg.mp3");
+  this.load.audio("coffeeshop", "assets/audio/coffeeshop.mp3");
+  this.load.audio("Dream", "assets/audio/Dream.mp3");
 
   for (const cfg of Object.values(TILEMAPS)) {
     this.load.tilemapTiledJSON(cfg.mapKey, cfg.mapFile);
@@ -3039,6 +3493,10 @@ for (const colName of collisionNames) {
     if (t.collides) collides++;
   });
 }
+  // ✅ 依地圖自動切換循環環境音 / BGM
+  try { applyMapLoopSfx(stageKey, this); } catch (_e) {}
+  try { applyMapLoopMusic(stageKey, this); } catch (_e) {}
+
 }
 
   create(data = {}) {
