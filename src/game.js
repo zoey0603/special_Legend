@@ -2001,7 +2001,7 @@ const DIALOGS = {
       { name: "褚冥漾", text: "『呃......燈光好亮......』", face: "uh" },
       { name: "  ", text: "（……）", action: { type: "eggImage", state: "out" } },
       { name: "褚冥漾", text: "......剛剛那是怎樣？", face: "really" },
-      { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自「偶像在身邊」" },
+      { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自「偶像在身邊」", action: { type: "sfx", key: "ding", volume: 0.3 } },
     ];
   }
   if (!DIALOGS["coffee_trigger_coffee"]) {
@@ -2029,7 +2029,7 @@ const DIALOGS = {
       { name: "  ", text: "（……）", action: { type: "eggImage", state: "out" } },
       { name: "褚冥漾", text: "......剛剛那是怎樣？", face: "really" },
       { name: "褚冥漾", text: "呃......身體好痛，感覺像真的打了一整天工一樣......" },
-      { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自2020紀念特展咖啡廳活動" },
+      { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自2020紀念特展咖啡廳活動", action: { type: "sfx", key: "ding", volume: 0.3 } },
     ];
   }
 })();
