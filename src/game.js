@@ -1866,17 +1866,17 @@ const DIALOGS = {
         { type: "face", actor: "bingt", dir: "right" },
         { type: "face", actor: "chu", dir: "left" },
         { type: "lay", actor: "chu", ms: 1, angle: 90 },
-        { type: "runTo", actor: "bingt", x: 101, y: 46, ms: 250 },
-        { type: "runTo", actor: "cat", x: 84, y: 68, ms: 250 },
-        { type: "runTo", actor: "qian", x: 81, y: 95, ms: 250 },
-        { type: "runTo", actor: "ryan", x: 101, y: 114, ms: 250 },
-        { type: "runTo", actor: "five", x: 140, y: 47, ms: 250 },
-        { type: "runTo", actor: "moon", x: 900, y: 900, ms: 250 },
-        { type: "runTo", actor: "ran", x: 900, y: 900, ms: 250 },
-        { type: "runTo", actor: "angel", x: 900, y: 900, ms: 250 },
-        { type: "runTo", actor: "twins2", x: 900, y: 900, ms: 250 },
-        { type: "runTo", actor: "bigbro", x: 900, y: 900, ms: 250 },
-        { type: "runTo", actor: "twins1", x: 900, y: 900, ms: 250 },
+        { type: "runTo", actor: "bingt", x: 101, y: 46, ms: 50 },
+        { type: "runTo", actor: "cat", x: 84, y: 68, ms: 50 },
+        { type: "runTo", actor: "qian", x: 81, y: 95, ms: 50 },
+        { type: "runTo", actor: "ryan", x: 101, y: 114, ms: 50 },
+        { type: "runTo", actor: "five", x: 140, y: 47, ms: 50 },
+        { type: "runTo", actor: "moon", x: 900, y: 900, ms: 50 },
+        { type: "runTo", actor: "ran", x: 900, y: 900, ms: 50 },
+        { type: "runTo", actor: "angel", x: 900, y: 900, ms: 50 },
+        { type: "runTo", actor: "twins2", x: 900, y: 900, ms: 50 },
+        { type: "runTo", actor: "bigbro", x: 900, y: 900, ms: 50 },
+        { type: "runTo", actor: "twins1", x: 900, y: 900, ms: 50 },
         { type: "fadeBlack", to: 0, ms: 650 },
         { type: "show", actor: "bingt" },
         { type: "show", actor: "qian" },
@@ -4515,6 +4515,7 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
 
 
