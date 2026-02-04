@@ -1997,7 +1997,6 @@ const DIALOGS = {
    ]},
       { name: "  ", text: "只見剛剛才離開的安地爾赫然出現在應援的粉絲群之中，見他看過來甚至還朝他眨眨眼。" },
       { name: "褚冥漾", text: "『......』", face: "deny" },
-      { name: "褚冥漾", text: "『呃......燈光好亮......』", face: "uh" },
       { name: "  ", text: "燈光一閃，褚冥漾下意識閉上眼，等待這一陣過強的光線過去。" },
       { name: "褚冥漾", text: "『呃......燈光好亮......』", face: "uh" },
       { name: "  ", text: "（……）", action: { type: "eggImage", state: "out" } },
@@ -2029,7 +2028,7 @@ const DIALOGS = {
       { name: "褚冥漾", text: "來了。" },
       { name: "  ", text: "（……）", action: { type: "eggImage", state: "out" } },
       { name: "褚冥漾", text: "......剛剛那是怎樣？", face: "really" },
-      { name: "褚冥漾", text: "呃......身體好痛，感覺像真的打了一整天工一樣......" },
+      { name: "褚冥漾", text: "呃......身體好痛，感覺像真的打了一整天工一樣......", face: "uh" },
       { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自2020紀念特展咖啡廳活動", action: { type: "sfx", key: "ding", volume: 0.3 } },
     ];
   }
@@ -4516,4 +4515,5 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
