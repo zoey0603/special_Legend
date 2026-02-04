@@ -1990,7 +1990,7 @@ const DIALOGS = {
       { name: "路人A", text: "冰炎我們愛你！！！" },
       { name: "路人B", text: "漾漾加油！！！" },
       { name: "褚冥漾", text: "『那是在喊我嗎？......嗯？』" },
-      { name: "  ", text: "褚冥漾的視線掃向台下應援的粉絲們，發現了一個熟悉的到讓人想吐的身影。" },
+      { name: "  ", text: "褚冥漾的視線掃向台下應援的粉絲們，發現了一個熟悉到讓人想吐的身影。" },
       { name: "褚冥漾", text: "『安！地！爾！！！怎麼又是你！怎麼總是你！！！』", face: "wtf", action: [
       { type: "cameraShake", ms: 200, intensity: 0.1 },
       { type: "sfx", key: "cameraShake", volume: 0.3 },
@@ -4515,6 +4515,7 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
 
 
