@@ -1205,6 +1205,7 @@ function continueGame() {
   // ✅ 避免讀檔切場時 DOM 還殘留舊視窗
   closeDialog();
   closeChoicePopup();
+  hideEggImage()
   const gs = ensureGameState();
   gs.restoring = true;
   const data = loadGame();
@@ -4515,3 +4516,4 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
