@@ -50,13 +50,24 @@ let _choiceIndex = 0;
 let _choiceResolve = null;
 let _choiceMode = "real"; // "tease" | "real"
 let _choiceOptions = [];
+let eggOverlayEl = document.getElementById("eggOverlay");
+let eggOverlayImgEl = document.getElementById("eggOverlayImg");
+
+// 如果 HTML 沒放，也自動建立（避免你忘記加）
+(function ensureEggOverlayDom(){
+  if (!eggOverlayEl) {
+    eggOverlayEl = document.createElement("div");
+    eggOverlayEl.id = "eggOverlay";
+    eggOverlayEl.innerHTML = `<img id="eggOverlayImg" alt="">`;
+    document.body.appendChild(eggOverlayEl);
+    eggOverlayImgEl = eggOverlayEl.querySelector("#eggOverlayImg");
+  }
+})();
 
 // ===== Warning Typewriter (DOM-based) =====
 // ✅ 只在「同一個分頁/同一輪遊戲」顯示一次：返回主選單/重新開始都不會再跳。
 // 若你希望「關掉瀏覽器也不要再跳」，把 sessionStorage 改成 localStorage 即可。
 const WARNING_KEY = "MZ_WARNING_SHOWN_V1";
-
-
 
 // ===== Warning Audio Gate =====
 // 需求：
@@ -75,7 +86,7 @@ function stopWarningMusic(){
   window.__WARNING_MUSIC__ = null;
 }
 
-function startWarningMusic(scene, { key = "warming", volume = 0.2, rate = 1, detune = 0 } = {}){
+function startWarningMusic(scene, { key = "warming", volume = 0.6, rate = 1, detune = 0 } = {}){
   if (!scene?.sound || !key) return;
   stopWarningMusic();
 
@@ -147,9 +158,9 @@ function bootShowWarningOnce(scene){
   // ✅ 警語期間：播放 warming 音樂，並先關掉所有循環音效/音樂（避免 fire 提前出現）
   window.__WARNING_ACTIVE__ = true;
   try { stopLoopSfx(); } catch (_e) {}
-  try { stopMapLoopSfx(); } catch (_e) {}
-  try { stopMapLoopMusic(); } catch (_e) {}
-  try { startWarningMusic(scene, { key: "warming", volume: 0.2 }); } catch (_e) {}
+  try { pauseMapLoopSfx(); } catch (_e) {}
+  try { pauseMapLoopMusic(); } catch (_e) {}
+  try { startWarningMusic(scene, { key: "warming", volume: 0.6 }); } catch (_e) {}
 
   showWarningOverlay();
 
@@ -227,6 +238,74 @@ function bootShowWarningOnce(scene){
   }, delay);
 
   return true;
+}
+
+// === Egg image overlay helpers ===
+const EGG_IMAGE_SRC = {
+  coffee: "assets/img/coffee.png", // 你專案實際路徑若不同就改這裡
+  idol: "assets/img/idol.png",
+};
+
+let eggWrapEl = null;
+let eggImgEl = null;
+let eggHideTimer = null;
+
+function ensureEggImageDom() {
+  if (eggWrapEl && eggImgEl) return;
+
+  eggWrapEl = document.createElement("div");
+  eggWrapEl.id = "eggImageWrap";
+  eggWrapEl.className = "egg-image-wrap"; // CSS 會用到
+
+  eggImgEl = document.createElement("img");
+  eggImgEl.id = "eggImage";
+  eggImgEl.className = "egg-image";
+  eggImgEl.alt = "egg";
+
+  eggWrapEl.appendChild(eggImgEl);
+  document.body.appendChild(eggWrapEl);
+}
+
+function showEggImage(key) {
+  ensureEggImageDom();
+
+  const src = EGG_IMAGE_SRC[key];
+  if (!src) {
+    console.warn("[eggImage] unknown key:", key);
+    return;
+  }
+
+  // 清掉上一輪 hide 的 timer（避免你剛 show 又被上一輪 hide 收掉）
+  if (eggHideTimer) {
+    clearTimeout(eggHideTimer);
+    eggHideTimer = null;
+  }
+
+  // ✅ 每次都更新圖片來源（重點！不然第二張永遠不換）
+  eggImgEl.src = src;
+
+  // ✅ 重新觸發動畫：移除 class → 強制 reflow → 再加回 class
+  eggWrapEl.classList.remove("show");
+  eggWrapEl.classList.remove("hide");
+
+  // 強制重算樣式，讓 transition/animation 能重新跑
+  void eggWrapEl.offsetWidth;
+
+  eggWrapEl.classList.add("show");
+}
+
+function hideEggImage() {
+  if (!eggWrapEl) return;
+
+  eggWrapEl.classList.remove("show");
+  eggWrapEl.classList.add("hide");
+
+  // 等淡出結束再真正隱藏（時間要跟 CSS transition 對上）
+  if (eggHideTimer) clearTimeout(eggHideTimer);
+  eggHideTimer = setTimeout(() => {
+    // 保持 DOM 在，但回到初始狀態
+    eggWrapEl.classList.remove("hide");
+  }, 260); // ← 這個數字請跟 CSS 的 transition 時間一致
 }
 // =========================
 // Choice Popup (two-stage)
@@ -375,8 +454,8 @@ function showEndOverlay() {
 
   // ✅ END 畫面就不需要循環音效了
   try { stopLoopSfx(); } catch (_e) {}
-  try { stopMapLoopSfx(); } catch (_e) {}
-  try { stopMapLoopMusic(); } catch (_e) {}
+  try { pauseMapLoopSfx(); } catch (_e) {}
+  try { pauseMapLoopMusic(); } catch (_e) {}
 
   // 在 END 畫面前先插入一次「感謝名單」(2.5 秒)
   const creditsEl = document.getElementById("endCredits");
@@ -486,8 +565,8 @@ function showMenu() {
   const gs = ensureGameState();
   // ✅ 回到主選單時停止段落循環音效/地圖環境音/地圖 BGM
   try { stopLoopSfx(); } catch (_e) {}
-  try { stopMapLoopSfx(); } catch (_e) {}
-  try { stopMapLoopMusic(); } catch (_e) {}
+  try { pauseMapLoopSfx(); } catch (_e) {}
+  try { pauseMapLoopMusic(); } catch (_e) {}
   refreshContinueButton();
   refreshBackButton();
 
@@ -518,7 +597,12 @@ function hideMenu() {
 
   gs.phase = "playing";
   window.__SCENE__?.scene.resume();
+
+  // ✅ 回遊戲時恢復地圖環境音 / BGM
+  try { resumeMapLoopSfx(); } catch (_e) {}
+  try { resumeMapLoopMusic(); } catch (_e) {}
 }
+
 
 function showMenuToast(msg, ms = 900) {
   if (!menuToastEl) return;
@@ -587,7 +671,6 @@ window.__LOOP_SFX_STAGE__ = window.__LOOP_SFX_STAGE__ ?? null;
 // 例：prologue_fire 一直有火焰聲；wake_blackhall 你可改成你想要的 key（或先註解掉）
 const STAGE_LOOP_SFX = {
   coffee_branch: { key: "coffeeshop", volume: 0.15 },
-  // wake_blackhall: { key: "Dream", volume: 0.15 },
   // white_garden: { key: "wind", volume: 0.25 }, // 如果你有 wind 音效的話
 };
 
@@ -690,6 +773,26 @@ function stopMapLoopSfx() {
   window.__MAP_LOOP_SFX_STAGE__ = null;
 }
 
+// ===== Map Loop SFX: pause/resume (for menu) =====
+window.__MAP_LOOP_SFX_PAUSED_BY_MENU__ = window.__MAP_LOOP_SFX_PAUSED_BY_MENU__ ?? false;
+
+function pauseMapLoopSfx() {
+  const s = window.__MAP_LOOP_SFX__;
+  if (!s) return;
+  window.__MAP_LOOP_SFX_PAUSED_BY_MENU__ = true;
+  try { if (typeof s.pause === "function") s.pause(); } catch (_e) {}
+}
+
+function resumeMapLoopSfx() {
+  const s = window.__MAP_LOOP_SFX__;
+  if (!s) return;
+  if (!window.__MAP_LOOP_SFX_PAUSED_BY_MENU__) return;
+  window.__MAP_LOOP_SFX_PAUSED_BY_MENU__ = false;
+  try { if (typeof s.resume === "function") s.resume(); } catch (_e) {}
+}
+
+
+
 function startMapLoopSfx(scene, key, opts = {}) {
   if (!scene?.sound || !key) return;
   // ✅ 警語期間：不要播放地圖環境音效
@@ -725,7 +828,7 @@ function refreshMapLoopSfxVolume() {
 function applyMapLoopSfx(stageKey, sceneOverride) {
   // ✅ 警語期間：不要播放地圖環境音效
   if (window.__WARNING_ACTIVE__) {
-    try { stopMapLoopSfx(); } catch (_e) {}
+    try { pauseMapLoopSfx(); } catch (_e) {}
     window.__MAP_LOOP_SFX_STAGE__ = null;
     return;
   }
@@ -769,6 +872,26 @@ function stopMapLoopMusic() {
   window.__MAP_LOOP_MUSIC_STAGE__ = null;
 }
 
+// ===== Map Loop Music: pause/resume (for menu) =====
+window.__MAP_LOOP_MUSIC_PAUSED_BY_MENU__ = window.__MAP_LOOP_MUSIC_PAUSED_BY_MENU__ ?? false;
+
+function pauseMapLoopMusic() {
+  const s = window.__MAP_LOOP_MUSIC__;
+  if (!s) return;
+  window.__MAP_LOOP_MUSIC_PAUSED_BY_MENU__ = true;
+  try { if (typeof s.pause === "function") s.pause(); } catch (_e) {}
+}
+
+function resumeMapLoopMusic() {
+  const s = window.__MAP_LOOP_MUSIC__;
+  if (!s) return;
+  if (!window.__MAP_LOOP_MUSIC_PAUSED_BY_MENU__) return;
+  window.__MAP_LOOP_MUSIC_PAUSED_BY_MENU__ = false;
+  try { if (typeof s.resume === "function") s.resume(); } catch (_e) {}
+}
+
+
+
 function startMapLoopMusic(scene, key, opts = {}) {
   if (!scene?.sound || !key) return;
   // ✅ 警語期間：只播 warming，不播地圖 BGM
@@ -804,7 +927,7 @@ function refreshMapLoopMusicVolume() {
 function applyMapLoopMusic(stageKey, sceneOverride) {
   // ✅ 警語期間：只播 warming，不播地圖 BGM
   if (window.__WARNING_ACTIVE__) {
-    try { stopMapLoopMusic(); } catch (_e) {}
+    try { pauseMapLoopMusic(); } catch (_e) {}
     window.__MAP_LOOP_MUSIC_STAGE__ = null;
     return;
   }
@@ -897,6 +1020,7 @@ function saveGame() {
     currentDialogId,
     dialogOpen: !!dialogOpen,
     gameFinished: !!gameFinished,
+    coffeeFreeRoam: !!window.__COFFEE_FREE_ROAM__,
     stage: window.__STAGE__ || "prologue_fire",
     whiteGardenFired: Object.fromEntries(
       WHITE_GARDEN_TRIGGERS.map(t => [t.id, !!t.fired])
@@ -1045,6 +1169,9 @@ if (menuMode === "settings") {
 window.addEventListener("keydown", onKeyDown, { capture: true });
 
 function startNewGame() {
+  // ✅ 避免讀檔切場時 DOM 還殘留舊視窗
+  closeDialog();
+  closeChoicePopup();
   const gs = ensureGameState();
   gs.restoring = false;
 
@@ -1058,6 +1185,7 @@ function startNewGame() {
 
   // ✅ 劇情一定回開頭
   gameFinished = false;
+  window.__COFFEE_FREE_ROAM__ = false;
   storyStep = 0;
   storyIndex = 0;
   currentDialogId = STORY_FLOW[0];
@@ -1092,10 +1220,12 @@ function continueGame() {
 
   // ✅ 不再恢復 dialogOpen，確保回遊戲時對話框關閉
   gameFinished = !!data.gameFinished;
+  window.__COFFEE_FREE_ROAM__ = !!data.coffeeFreeRoam;
   storyStep = data.storyStep ?? 0;
   storyIndex = data.storyIndex ?? 0;
   currentDialogId = data.currentDialogId ?? STORY_FLOW[0];
-  dialogOpen = !!data.dialogOpen;
+  dialogOpen = false; // force close dialog on continue; scene will reopen only if save says dialogOpen
+
   // DOM 先關掉，等場景 create() 載入完成再決定要不要打開
   dialogEl.classList.remove("show");
   const firedMap = data.whiteGardenFired || {};
@@ -1240,9 +1370,10 @@ const STAGE_SPAWN = {
 
 const WHITE_GARDEN_TRIGGERS = [
   // 你可以依地圖調整座標/大小
-  { id: "white_garden", x: 560, y: 190, w: 20, h: 75, once: true, fired: false },
+  { id: "white_garden", x: 570, y: 200, w: 30, h: 5, once: true, fired: false },
   // { id: "pond_event", x: 340, y: 120, w: 70, h: 50, once: false, fired: false },
 ];
+
 
 const DIALOGS = {
   prologue_fire: [
@@ -1471,8 +1602,9 @@ const DIALOGS = {
   { type: "sfx", key: "running", volume: 0.3 },
   { type: "toPlayer", actor: "bigbro", enterFrom: "right", enterDist: 260, side: "right", gapY: 1, ms: 450 },
   ]},
-    { name: "雷多", text: "伊多！", action: { type: "toPlayer", actor: "bigbro", side: "down", gapY: 1, ms: 450 } },
+    { name: "雷多", text: "伊多！", action: { type: "toPlayer", actor: "bigbro", side: "down", gapY: 1, ms: 450 }},
     { name: "  ", text: "伴隨著雷多驚喜的聲音，水妖精如風一般衝到伊多面前，擋在他身前面向眾人。", action: [
+  { type: "sfx", key: "shu", volume: 0.5 },
   { type: "toActor", actor: "twins1", target: "bigbro", side: "left", gap: 1, speed: 500 },
   { type: "face", actor: "twins1", dir: "left" }
   ]},
@@ -1525,7 +1657,7 @@ const DIALOGS = {
     { name: "褚冥漾", text: "不是，我剛剛說什麼了！然你腦袋還好嗎？！", face: "wtf", action: [
       { type: "cameraShake", ms: 180, intensity: 0.05 },
       { type: "sfx", key: "cameraShake", volume: 0.3 },
-   ]},,
+   ]},
     { name: "褚冥玥", text: "褚冥漾，你再也不是我弟弟了！" },
     { name: "褚冥漾", text: "這裡有人在聽我說話嗎！", face: "wtf", action: [
       { type: "cameraShake", ms: 180, intensity: 0.05 },
@@ -1617,11 +1749,12 @@ const DIALOGS = {
         { type: "move", actor: "chu", dx: -10, dy: 0, ms: 250 },
        ]},
         { name: "褚冥漾", text: "？？！！", face: "wtf" },
-        { name: "安地爾", text: "報酬我收到了，你想離開就離開吧。", action: [
+        { name: "安地爾", text: "報酬我收到了，你想留下來逛逛或是想離開都可以。", action: [
         { type: "runTo", actor: "coffee", x: 223, y: 173, ms: 900 },
         { type: "runTo", actor: "coffee", x: 223, y: -100, ms: 1200 },
        ] },
         { name: "不那麼快樂的Happy End", text: "妖師的頭髮-1，但逃脫了夢境。" },
+        { name: "  ", text: "恭喜通過！可以留下來找找安地爾的咖啡廳有甚麼彩蛋喔！觸發所有彩蛋即可離開！" },
       ];
     }
     if (!DIALOGS.ending_B) {
@@ -1837,6 +1970,70 @@ const DIALOGS = {
   }
 })();
 
+
+// =========================
+// Coffee triggers dialogs (defaults; you can overwrite in DIALOGS)
+// =========================
+(function patchCoffeeTriggerDialogs(){
+  if (window.__COFFEE_TRIGGER_DIALOG_PATCHED__) return;
+  window.__COFFEE_TRIGGER_DIALOG_PATCHED__ = true;
+
+  if (!DIALOGS["coffee_trigger_Memory"]) {
+    DIALOGS["coffee_trigger_Memory"] = [
+      { name: "  ", text: "褚冥漾在矮櫃上發現一個空空如也的相框。" },
+      { name: "褚冥漾", text: "『安地爾幹嘛在這裡擺一個空相框......嗯？』", face: "uh" },
+      { name: "  ", text: "（觸發了不存在的記憶。）" },
+      { name: "  ", text: "（……）", action: { type: "eggImage", key: "idol", state: "in" } },
+      { name: "褚冥漾", text: "『這裡是哪裡......？』", face: "really" },
+      { name: "褚冥漾", text: "『舞台？！我剛剛不是還在咖啡廳嗎？！』", face: "shock" },
+      { name: "路人A", text: "冰炎我們愛你！！！" },
+      { name: "路人B", text: "漾漾加油！！！" },
+      { name: "褚冥漾", text: "『那是在喊我嗎？......嗯？』" },
+      { name: "  ", text: "褚冥漾的視線掃向台下應援的粉絲們，發現了一個熟悉的到讓人想吐的身影。" },
+      { name: "褚冥漾", text: "『安！地！爾！！！怎麼又是你！怎麼總是你！！！』", face: "wtf", action: [
+      { type: "cameraShake", ms: 200, intensity: 0.1 },
+      { type: "sfx", key: "cameraShake", volume: 0.3 },
+   ]},
+      { name: "  ", text: "只見剛剛才離開的安地爾赫然出現在應援的粉絲群之中，見他看過來甚至還朝他眨眨眼。" },
+      { name: "褚冥漾", text: "『......』", face: "deny" },
+      { name: "褚冥漾", text: "『呃......燈光好亮......』", face: "uh" },
+      { name: "  ", text: "燈光一閃，褚冥漾下意識閉上眼，等待這一陣過強的光線過去。" },
+      { name: "褚冥漾", text: "『呃......燈光好亮......』", face: "uh" },
+      { name: "  ", text: "（……）", action: { type: "eggImage", state: "out" } },
+      { name: "褚冥漾", text: "......剛剛那是怎樣？", face: "really" },
+      { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自「偶像在身邊」" },
+    ];
+  }
+  if (!DIALOGS["coffee_trigger_coffee"]) {
+    DIALOGS["coffee_trigger_coffee"] = [
+      { name: "  ", text: "吧檯附近飄來濃郁的咖啡香，讓褚冥漾忍不住多看了兩眼。" },
+      { name: "褚冥漾", text: "這杯咖啡怎麼單獨放在這裡......" },
+      { name: "  ", text: "（不存在的記憶湧入腦海。）" },
+      { name: "  ", text: "（……）", action: { type: "eggImage", key: "coffee", state: "in" } },
+      { name: "  ", text: "耳邊傳來杯盤碰撞的清脆聲響，還有稀稀疏疏的談話聲，空氣中瀰漫著濃郁的咖啡香氣。" },
+      { name: "褚冥漾", text: "『這裡是哪裡......？咖啡廳？』" },
+      { name: "客人A", text: "不好意思，我想要點餐。" },
+      { name: "冰炎", text: "來了。" },
+      { name: "褚冥漾", text: "『學長？！』" },
+      { name: "  ", text: "看著冰炎穿著跟自己一模一樣的服裝，褚冥漾忍不住開始想：" },
+      { name: "褚冥漾", text: "『冰牙族跟燄之谷難道破產了嗎？』" },
+      { name: "褚冥漾", text: "『呃，我不會因為看到學長被迫兼差打工的辛酸畫面而被滅口吧？』" },
+      { name: "  ", text: "冰炎替客人點完餐，一轉頭就發現平時還算機靈的褚冥漾呆呆地站在原地一動也不動，眉頭一皺，三兩步上前低聲提醒。" },
+      { name: "冰炎", text: "你在發什麼呆？要是身體不舒服就先去休息室待一會。", face: "angry" },
+      { name: "褚冥漾", text: "欸？啊......我沒事。" },
+      { name: "冰炎", text: "沒事就快去送餐，別傻站著。", face: "angry" },
+      { name: "褚冥漾", text: "喔喔。" },
+      { name: "客人B", text: "不好意思，這裡的空盤可以幫我們收一收嗎？" },
+      { name: "  ", text: "趁此機會，褚冥漾趕緊逃離了自家學長彷彿要吃人的目光。" },
+      { name: "褚冥漾", text: "來了。" },
+      { name: "  ", text: "（……）", action: { type: "eggImage", state: "out" } },
+      { name: "褚冥漾", text: "......剛剛那是怎樣？", face: "really" },
+      { name: "褚冥漾", text: "呃......身體好痛，感覺像真的打了一整天工一樣......" },
+      { name: "  ", text: "恭喜獲得彩蛋之一！────捏他自2020紀念特展咖啡廳活動" },
+    ];
+  }
+})();
+
 // 1) 章節順序（一定要放在 currentDialogId 前）
 const STORY_FLOW = [
   "prologue_fire",
@@ -1854,6 +2051,9 @@ let dialogOpen = false;
 // ===== Branch flags =====
 let andielBranch = null;           // null | "opt1" | "opt2"
 let __BLOCK_AUTO_NEXT_ONCE__ = false; // 避免換章節時 auto-next 跳過第一句
+
+// ===== Coffee free roam (after coffee_branch) =====
+window.__COFFEE_FREE_ROAM__ = window.__COFFEE_FREE_ROAM__ ?? false;
 
 function normalizeName(n) {
   return (n || "").trim();
@@ -2158,6 +2358,10 @@ if (currentDialogId === "white_garden" && angel) {
   angel.setVisible(shouldAngelBeVisible(lines, idx));
 }
 
+if (currentDialogId === "ending_B" && angel) {
+  angel.setVisible(shouldAngelBeVisible(lines, idx));
+}
+
 if (currentDialogId === "ending_B" && qian) {
   qian.setVisible(shouldqianBeVisible(lines, idx));
 }
@@ -2310,6 +2514,26 @@ function lineHasDashBehindBing(line) {
   return acts.some(a => a && a.type === "dashBehind" && a.actor === "bing");
 }
 
+
+// side dialog ids：不推進 STORY_FLOW，也不顯示 END
+function isSideDialogId(id){
+  return typeof id === "string" && (
+    id.startsWith("coffee_trigger_") ||
+    id.startsWith("coffee_easter_")
+  );
+}
+
+function openDialogById(id, { side = false } = {}) {
+  if (!id) return;
+  // side 對話：不改 storyStep，只換 currentDialogId
+  currentDialogId = id;
+  storyIndex = 0;
+  dialogOpen = true;
+  dialogEl.classList.add("show");
+  try { applyStageLoopSfx(currentDialogId); } catch (_e) {}
+  try { window.__MZ_UPDATE_MOBILE_PAD__?.(); } catch (_e) {}
+  renderDialog();
+}
 function nextDialog() {
   const lines = DIALOGS[currentDialogId] || [];
   // ✅ 先判斷「現在這一句」是不是 dashBehind
@@ -2318,6 +2542,42 @@ function nextDialog() {
 
 if (storyIndex >= lines.length) {
   closeDialog();
+
+  // ✅ side dialogs：看完就回到自由探索（不推進章節，也不顯示 END）
+  if (isSideDialogId(currentDialogId)) {
+    // ✅ coffee 彩蛋：每個 trigger 都「至少觸發過一次」後，直接進 END
+    if (window.__COFFEE_FREE_ROAM__ && Array.isArray(window.__COFFEE_EGG_IDS__) && window.__COFFEE_EGG_IDS__.length) {
+      const fired = window.__COFFEE_TRIGGER_FIRED__ || {};
+      const done = window.__COFFEE_EGG_IDS__.every(k => !!fired[k]);
+      if (done) {
+        gameFinished = true;
+        showEndOverlay();
+        return;
+      }
+    }
+
+    // 回到主線章節 id（避免存檔時停在 side dialog）
+    currentDialogId = STORY_FLOW[storyStep] || currentDialogId;
+    storyIndex = (DIALOGS[currentDialogId] || []).length;
+    return;
+  }
+
+  // ✅ coffee_branch 結束：進入 coffee 自由探索模式（不顯示 END）
+  if (currentDialogId === "coffee_branch") {
+    window.__COFFEE_FREE_ROAM__ = true;
+    gameFinished = false;
+
+    // ✅ 劇情結束後：停止原本 coffee 的 BGM，改播 coloregg
+    try {
+      MAP_LOOP_MUSIC.coffee = { key: "coloregg", volume: 0.30 };
+      applyMapLoopMusic("coffee");
+    } catch(_e) {}
+
+    try { showToast("（咖啡廳：可自由探索彩蛋）"); } catch(_e) {}
+    try { window.__SCENE__?.enableCoffeeTriggers?.(true); } catch(_e) {}
+    return;
+  }
+
 
   // ✅ ending_B：結局 B 結束就直接 END（不進下一章）
   if (currentDialogId === "ending_B") {
@@ -3006,6 +3266,11 @@ if (action.type === "flashWhite") {
   });
 }
 
+if (action.type === "eggImage") {
+  if (action.state === "in") showEggImage(action.key); // coffee / idol
+  else hideEggImage();
+}
+
   // 走位（相對位移）
   if (action.type === "move") {
     const actor = getActor(action.actor);
@@ -3082,7 +3347,7 @@ if (action.type === "emote") {
 }
 
 if (action.type === "sfx") {
-  const key = action.key ?? "hit" | "breaking" | "running" | "blooding" | "fire" | "cameraShake" | "jump" | "hurt" | "bird" | "shu" | "emote" | "hurt";
+  const key = action.key ?? "hit" | "breaking" | "running" | "blooding" | "fire" | "cameraShake" | "jump" | "hurt" | "bird" | "shu" | "emote" | "hurt" | "ding";
   const volume = action.volume ?? 1;
   const rate = action.rate ?? 1;
   const detune = action.detune ?? 0;
@@ -3349,7 +3614,10 @@ preload() {
   this.load.image("bigbro_front", "assets/img/bigbro_front.png");
   this.load.image("coffee_front", "assets/img/coffee_front.png");
   this.load.image("bingt_front", "assets/img/bingt_front.png");
-  this.load.image("angry", "assets/img/angry.png"); 
+  this.load.image("angry", "assets/img/angry.png");
+  this.load.image("idol", "assets/img/idol.png"); 
+  this.load.image("coffee", "assets/img/coffee.png"); 
+
   // 你如果之後有冰炎/第三人，也可以加
   // this.load.image("bing_front", "assets/bing_front.png");
   this.load.audio("hit", "assets/audio/hit.mp3");
@@ -3367,6 +3635,7 @@ preload() {
   this.load.audio("bird", "assets/audio/bird.mp3");
   this.load.audio("emote", "assets/audio/emote.mp3");
   this.load.audio("shu", "assets/audio/shu.mp3");
+  this.load.audio("ding", "assets/audio/ding.mp3");
 
   this.load.audio("coloregg", "assets/audio/coloregg.mp3");
   this.load.audio("coffeeshop", "assets/audio/coffeeshop.mp3");
@@ -3698,12 +3967,145 @@ this.buildWhiteGardenTriggers = () => {
   }
 };
 
+
+// ============ coffee triggers (from Tiled object layer: Triggers) ============
+this.coffeeTriggers = [];
+this._coffeeTriggerOverlaps = [];
+
+// enable / disable（只做開關）
+this.enableCoffeeTriggers = (enabled) => {
+  for (const t of this.coffeeTriggers) setZoneEnabled(t.zone, enabled);
+};
+
+// 建置/重建 coffee triggers（從 tilemap 的 Triggers 物件層讀取）
+this.buildCoffeeTriggersFromMap = () => {
+  // 清 overlaps
+  if (this._coffeeTriggerOverlaps?.length) {
+    for (const o of this._coffeeTriggerOverlaps) o?.destroy?.();
+  }
+  this._coffeeTriggerOverlaps = [];
+
+  // 清 zones
+  if (this.coffeeTriggers?.length) {
+    for (const t of this.coffeeTriggers) t.zone?.destroy?.();
+  }
+  this.coffeeTriggers = [];
+
+  const map = this._tilemap;
+  if (!map?.getObjectLayer) {
+    console.warn("[coffee] no tilemap for triggers");
+    return;
+  }
+
+  const layer = map.getObjectLayer("Triggers");
+  const objs = layer?.objects || [];
+
+  // ✅ once 觸發記錄（避免未初始化導致錯誤）
+  window.__COFFEE_TRIGGER_FIRED__ = window.__COFFEE_TRIGGER_FIRED__ || {};
+
+    // ✅ 收集所有彩蛋 trigger 的 id（用於「全部觸發過一次後進 END」）
+  // 會從 object.name / type / properties.id 推導，並去重
+  const _allEggIds = [];
+  for (const o of objs) {
+    const ps = o.properties || [];
+    const pid2 = ps.find(p => p?.name === "id")?.value;
+    const _id = (pid2 || o.name || o.type || "trigger").toString().trim();
+    if (_id && !_allEggIds.includes(_id)) _allEggIds.push(_id);
+  }
+  window.__COFFEE_EGG_IDS__ = _allEggIds;
+
+  if (!objs.length) {
+    console.warn("[coffee] Triggers object layer is empty / missing");
+    return;
+  }
+
+  for (const obj of objs) {
+    const props = obj.properties || [];
+    const pid = props.find(p => p?.name === "id")?.value;
+    const id = (pid || obj.name || obj.type || "trigger").toString().trim();
+    const once = !!props.find(p => p?.name === "once")?.value;
+
+    const w = (obj.width && obj.width > 0) ? obj.width : 26;
+    const h = (obj.height && obj.height > 0) ? obj.height : 26;
+    const cx = obj.x + w / 2;
+    const cy = obj.y + h / 2;
+
+    // alpha 設 0 → 不可見；要 debug 可以改 0.35
+    const zone = this.add.rectangle(cx, cy, w, h, 0x00ffcc, 0);
+    this.physics.add.existing(zone, true);
+    zone.body.updateFromGameObject();
+
+    this.coffeeTriggers.push({ id, zone, once, inside:false, lastFire:0 });
+
+    const entry = this.coffeeTriggers[this.coffeeTriggers.length - 1];
+
+    const overlap = this.physics.add.overlap(this.player, zone, () => {
+      if (!zone?.body?.enable) return;
+      if (dialogOpen || gameFinished) return;
+
+      // 只有 coffee_branch 結束後才允許觸發彩蛋
+      if (!window.__COFFEE_FREE_ROAM__) return;
+
+      // ✅ 防止同一格「每幀都觸發」：只在「進入」時觸發一次，離開後才可再觸發
+      if (entry.inside) return;
+
+      // ✅ 小冷卻（保險）：避免邊界抖動造成連發
+      const now = (this.time && typeof this.time.now === "number") ? this.time.now : Date.now();
+      if (now - (entry.lastFire || 0) < 500) return;
+
+      entry.inside = true;
+      entry.lastFire = now;
+
+      // ✅ 記錄「曾經觸發過」（用於彩蛋完成判定），但仍允許重複觸發
+      window.__COFFEE_TRIGGER_FIRED__ = window.__COFFEE_TRIGGER_FIRED__ || {};
+      window.__COFFEE_TRIGGER_FIRED__[id] = true;
+
+      const dialogId = "coffee_trigger_" + id;
+      if (!DIALOGS[dialogId]) {
+        // 沒有設定對話就給提示（你也可以改成 return）
+        try { showToast("（尚未設定彩蛋對話：" + dialogId + "）"); } catch(_e) {}
+        return;
+      }
+
+      openDialogById(dialogId, { side: true });
+    });
+
+    this._coffeeTriggerOverlaps.push(overlap);
+  }
+
+  // 離開 trigger 才允許再次觸發（只要還在區域內就不會再觸發）
+// 用 inside flag 來做「進入一次、離開後才可再進入」
+// （避免 overlap callback 在同一格每幀觸發）
+if (!this.__coffeeWorldStepBound) {
+  this.__coffeeWorldStepBound = true;
+
+  this.physics.world.on("worldstep", () => {
+    if (!this.coffeeTriggers?.length) return;
+    const p = this.player.getBounds();
+    for (const t of this.coffeeTriggers) {
+      const z = t.zone;
+      if (!z?.body?.enable) continue;
+
+      const overlapping = Phaser.Geom.Intersects.RectangleToRectangle(p, z.getBounds());
+      // inside=true 表示「人還在 trigger 裡面」，所以不會再觸發
+      t.inside = overlapping;
+    }
+  });
+}};
+
 // 初始依照地圖決定是否啟用（只在白園才需要先建）
 if (initStage === "white_garden") {
   this.buildWhiteGardenTriggers();
   this.enableWhiteGardenTriggers(true);
 } else {
   this.enableWhiteGardenTriggers(false);
+}
+
+if (initStage === "coffee") {
+  this.buildCoffeeTriggersFromMap();
+  this.enableCoffeeTriggers(!!window.__COFFEE_FREE_ROAM__);
+} else {
+  this.enableCoffeeTriggers(false);
 }
 
 this.applyStageTriggers = (stage) => {
@@ -3721,6 +4123,15 @@ this.applyStageTriggers = (stage) => {
     this.enableWhiteGardenTriggers(true);
   } else {
     this.enableWhiteGardenTriggers(false);
+  }
+
+  // ✅ coffee triggers：進 coffee 就確保存在（從 tilemap 的 Triggers 物件層讀）
+  if (stage === "coffee") {
+    const broken = !this.coffeeTriggers?.length || !this.coffeeTriggers[0]?.zone?.body;
+    if (broken) this.buildCoffeeTriggersFromMap(); // ✅ 被清掉或尚未建就重建
+    this.enableCoffeeTriggers(true);
+  } else {
+    this.enableCoffeeTriggers(false);
   }
 
   this.canTrigger = true;
@@ -3937,6 +4348,10 @@ this.applyStageTriggers = (stage) => {
   const d = gs.pendingLoad;
   gs.pendingLoad = null;
 
+
+  // ✅ 讀檔進場先確保 UI 乾淨（避免延續上一輪的對話框）
+  try { closeDialog(); } catch(_e) {}
+  try { closeChoicePopup(); } catch(_e) {}
   // ✅ 玩家位置
   if (this.player && d.player) {
     if (this.player.body) this.player.body.reset(d.player.x, d.player.y);
@@ -3979,7 +4394,7 @@ this.applyStageTriggers = (stage) => {
   // ✅ 讀檔後「接續進度」：
 // - 若存檔時對話正在開啟：一定要接回去
 // - 若存檔時對話關閉，但 storyIndex > 0：通常代表你已經在某章中途，避免重踩觸發器把 storyIndex 重置成 0
-  const shouldResumeDialog = !!d.dialogOpen || ((d.storyIndex ?? 0) > 0);
+  const shouldResumeDialog = !!d.dialogOpen;
   if (shouldResumeDialog && !d.gameFinished) {
     currentDialogId = d.currentDialogId ?? currentDialogId;
     storyIndex = d.storyIndex ?? storyIndex;
@@ -4100,4 +4515,3 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
-
