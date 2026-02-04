@@ -1399,7 +1399,7 @@ const DIALOGS = {
      ]},
     { name: "  ", text: "他瞪大眼睛詫異，憑他的能力居然沒發覺身後有人。" },
     { name: "  ", text: "而當他看清來者時，詫異被不可置信給取代。" },
-    { name: "  ", text: "沒入體內的兇器是他再熟悉不能的峰云凋戈。順著槍身，他看到那白皙蔥指有著微不可察的顫抖。" },
+    { name: "  ", text: "沒入體內的兇器是他再熟悉不能的烽云凋戈。順著槍身，他看到那白皙蔥指有著微不可察的顫抖。" },
     { name: "褚冥漾", text: "學長......為什麼......", face: "blood" },
     { name: "冰炎.", text: "閉嘴！褚冥漾！", face: "angry" },
     { name: "  ", text: "學長打斷他的口氣有著憤恨、失望。紅瞳中倒映著褚冥漾蒼白的面容，可卻被憎恨充盈。" },
@@ -1446,7 +1446,7 @@ const DIALOGS = {
     { name: "褚冥漾", text: "還好只是一場夢……", face: "normal" },
     { name: "  ", text: "自己則是在黑館房內。" },
     { name: "  ", text: "深呼吸一口氣，雖然餘悸猶存，但對於還是地球人的褚冥漾睡眠還是很重要。" },
-    { name: "  ", text: "他躺回床上，閉上眼前心想：希望別再做這場夢境。" },
+    { name: "  ", text: "他躺回床上，閉上眼前心想：希望別再做這樣的夢。" },
     { name: "  ", text: "（……）", action: [
       { type: "gotoStage", stage: "white_garden", spawn: "entry" },
       { type: "fadeBlack", to: 0, ms: 450 }
@@ -1731,7 +1731,7 @@ const DIALOGS = {
         { name: "褚冥漾", text: "『你是在賣你自己嗎？』" },
         { name: "安地爾", text: "你好像在想一些很失禮的事情呢。" },
         { name: "褚冥漾", text: "。", face: "uh" },
-        { name: "  ", text: "安地爾似乎絲毫不在意褚冥漾擺出的態度，自顧自地繼續說道" },
+        { name: "  ", text: "安地爾似乎絲毫不在意褚冥漾擺出的態度，自顧自地繼續說道：" },
         { name: "安地爾", text: "你還沒意識到嗎？你正在作夢。" },
         { name: "  ", text: "安地爾的話彷彿瞬間打通褚冥漾的任督二脈，腦海霎時閃過那些一開始就覺得奇怪的部分。" },
         { name: "  ", text: "朋友們齊齊說些奇怪的話、完全不聽自己說話、奇怪的選項......" },
@@ -1920,7 +1920,7 @@ const DIALOGS = {
         { name: "褚冥漾", text: "沒什麼。" },
         { name: "千冬歲", text: "是說......漾漾。" },
         { name: "褚冥漾", text: "嗯？" },
-        { name: "千冬歲", text: "我在你心中的印象有這麼差嗎？夢裡的我也失智的太誇張了吧？" },
+        { name: "千冬歲", text: "我在你心中的印象有這麼差嗎？夢裡的我也失智得太誇張了吧？" },
         { name: "褚冥漾", text: "嗯？！", action: [
       { type: "cameraShake", ms: 180, intensity: 0.08 },
       { type: "sfx", key: "cameraShake", volume: 0.3 },
@@ -4515,5 +4515,6 @@ new Phaser.Game(config);
 window.addEventListener("resize", () => {
   // Phaser 會自己 FIT；這裡留著也行
 });
+
 
 
