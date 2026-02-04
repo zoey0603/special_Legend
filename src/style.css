@@ -509,3 +509,43 @@ html, body { margin:0; padding:0; background:#111; height:100%; }
   margin-top: 6px;
   width: 100%;
 }
+/* 彩蛋圖片容器：固定在螢幕中央 */
+.egg-image-wrap{
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+
+  /* 不要擋操作 */
+  pointer-events: none;
+
+  /* 一開始隱形 */
+  opacity: 0;
+  visibility: hidden;
+
+  /* 淡入淡出 */
+  transition: opacity .25s ease, visibility .25s ease;
+
+  /* ✅ 這個層級要 > 地圖 canvas，但 < 對話框 */
+  z-index: 500;
+}
+
+.egg-image-wrap.show{
+  opacity: 1;
+  visibility: visible;
+}
+
+.egg-image-wrap.hide{
+  opacity: 0;
+  visibility: hidden;
+}
+
+.egg-image{
+  max-width: min(70vw, 720px);
+  max-height: min(70vh, 520px);
+  display: block;
+
+  /* 可選：讓圖更像置中展示 */
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
+}
